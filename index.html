@@ -223,6 +223,13 @@ details.adv[open] summary{margin-bottom:8px}
 .live-banner.flash{animation:flash .6s ease-out}
 @keyframes flash{from{box-shadow:0 0 0 8px var(--glow)}to{box-shadow:0 0 0 0 transparent}}
 .live-log{margin:0;font-size:13px;color:var(--muted)}
+.countdown{grid-column:1 / -1;display:grid;gap:5px;margin-top:8px}
+.cd-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.cd-bar i{display:block;height:100%;width:100%;background:var(--accent);transition:width .25s linear}
+.cd-txt{font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.cd-txt.hot{color:var(--bad)}
+.countdown.hot .cd-bar i{background:var(--bad)}
+@media (prefers-reduced-motion: reduce){ .cd-bar i{transition:none} }
 details.manual summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}
 .manual-in{display:grid;gap:12px;margin-top:12px}
 .roulette{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:4px;background:var(--overlay);z-index:3}
@@ -543,7 +550,7 @@ const THIS_YEAR = new Date().getFullYear();
 let S, sel = null, confirmReset = false, showQR = false, manualOpen = false, rolling = false; const openTeams = new Set();
 function defaultCfg(){
   return {players:[], publicUrl:'', mesa:'', budget:300, formation:'4-3-3', hints:true,
-          leagues:Object.keys(LEAGUES), minV:10, stars:2, legends:1, big:false, troll:15, market:true, blind:false, bMin:20, bMax:60, sdbKey:'123'};
+          leagues:Object.keys(LEAGUES), minV:10, stars:2, legends:1, big:false, troll:15, market:true, timer:10, blind:false, bMin:20, bMax:60, sdbKey:'123'};
 }
 function fresh(cfg){
   return {phase:'setup', cfg: cfg || defaultCfg(), parts:[], slot:0, queue:[], used:[], extras:[], lotNo:1, last:null, hint:0, votes:[], hist:[], troll:{}, trades:[], bp:{}, skipUsed:false, bid:null, bids:[]};
@@ -854,6 +861,7 @@ function undo(){
   const prev = S.hist.pop(); if (!prev) return;
   const hist = S.hist; S = JSON.parse(prev); S.hist = hist;
   if (S.phase === 'market') fixMarket();
+  S.deadline = S.bid ? Date.now() + timerMs() : null;
 }
 
 // ---------- Silueta genérica (si no hay foto) ----------
@@ -884,6 +892,7 @@ function render(){
   }
   if (S.phase === 'sold') mountPhoto(S.last.id, true);
   save();
+  syncTimer();
   broadcast();
 }
 
@@ -967,6 +976,10 @@ function vSetup(){
       <div class="field" ${c.blind?'hidden':''}><span class="label">Precios trampa</span>
         <div class="seg">${[0,15,30].map(v=>`<button data-a="troll" data-v="${v}" aria-pressed="${c.troll===v}">${v ? v + ' %' : 'No'}</button>`).join('')}</div>
         <p class="note">${c.troll ? `En cada lote hay ${c.troll} % de chance de que salga un jugador flojo con precio de figura. Se descubre al revelarlo.` : 'Todos los precios base son reales.'}</p>
+      </div>
+      <div class="field"><span class="label">Cuenta regresiva de las pujas</span>
+        <div class="seg">${[0,10,15,20].map(v=>`<button data-a="timer" data-v="${v}" aria-pressed="${c.timer===v}">${v ? v + ' s' : 'No'}</button>`).join('')}</div>
+        <p class="note">${c.timer ? `Después de cada puja desde el teléfono, si nadie la supera en ${c.timer} segundos, se vende sola al que va ganando.` : 'Las pujas desde el teléfono se cierran solo con ¡Vendido!.'}</p>
       </div>
       <label class="check"><input id="market" type="checkbox" ${c.market?'checked':''}> Ofrecer mercado de pases al terminar cada posición</label>
       <label class="check"><input id="hints" type="checkbox" ${c.hints?'checked':''}> Permitir pistas (edad, nacionalidad, liga)</label>
@@ -1135,6 +1148,7 @@ document.addEventListener('click', e=>{
     case 'legends': c.legends = +t.dataset.v; break;
     case 'troll': c.troll = +t.dataset.v; break;
     case 'blind': c.blind = t.dataset.v === '1'; break;
+    case 'timer': c.timer = +t.dataset.v; break;
     case 'm-dir': M.dir = t.dataset.v; break;
     case 'm-trade': doTrade(); break;
     case 'm-next': next(); sel = null; break;
@@ -1249,7 +1263,8 @@ function vLive(){
   const b = S.bid, ns = needers();
   const prev = S.bids.slice(0, -1).slice(-5).reverse();
   return `<div class="live-banner ${b?'on':''}" id="livebanner">
-      ${b ? `<span class="label">Va ganando</span><div class="live-who">${esc(S.parts[b.pi].name)}</div><div class="live-amt num">${fmt(b.amt)}</div>`
+      ${b ? `<span class="label">Va ganando</span><div class="live-who">${esc(S.parts[b.pi].name)}</div><div class="live-amt num">${fmt(b.amt)}</div>
+             ${timerMs() && S.deadline ? vCountdown(S.deadline - Date.now(), timerMs(), ['cdbox','cdbar','cdtxt']) : ''}`
           : `<span class="label">Pujas desde los teléfonos</span><div class="live-who muted">Todavía nadie pujó</div><div class="live-amt num muted">Arranca en ${fmt(base(S.queue[0]))}</div>`}
     </div>
     ${prev.length ? `<p class="live-log">Antes: ${prev.map(x => esc(S.parts[x.pi].name) + ' ' + num1(x.amt) + ' M').join(' · ')}</p>` : ''}
@@ -1271,7 +1286,45 @@ function hostBid(pi, raw, key){
   if (!S.bid && amt < b) return `La primera puja arranca en ${fmt(b)}.`;
   if (amt > P.left) return `No te alcanza: te quedan ${fmt(P.left)}.`;
   S.bid = {pi, amt}; S.bids.push({pi, amt}); if (S.bids.length > 40) S.bids.shift();
+  S.deadline = timerMs() ? Date.now() + timerMs() : null;
   return null;
+}
+
+// ---------- Cuenta regresiva: cada puja reinicia el reloj; al llegar a 0 se vende al que va ganando ----------
+let bidTimer = null, tickTimer = null;
+const timerMs = () => (S && S.cfg && S.cfg.timer ? S.cfg.timer * 1000 : 0);
+function cdText(ms){
+  const s = Math.ceil(ms / 1000);
+  return s > 3 ? `Se vende en ${s} s` : s === 3 ? 'A la una…' : s === 2 ? 'A las dos…' : s === 1 ? '¡Y a las tres!' : 'Vendido';
+}
+function vCountdown(ms, total, ids){
+  const hot = ms <= 3000;
+  return `<div class="countdown ${hot ? 'hot' : ''}" id="${ids[0]}"><div class="cd-bar"><i id="${ids[1]}" style="width:${Math.max(0, Math.min(100, ms / total * 100))}%"></i></div>
+    <span class="cd-txt ${hot ? 'hot' : ''}" id="${ids[2]}" aria-live="polite">${cdText(ms)}</span></div>`;
+}
+function paintCountdown(boxId, barId, txtId, ms, total){
+  const box = document.getElementById(boxId); if (!box) return;
+  const hot = ms <= 3000;
+  box.classList.toggle('hot', hot);
+  const bar = document.getElementById(barId); if (bar) bar.style.width = Math.max(0, Math.min(100, ms / total * 100)) + '%';
+  const tx = document.getElementById(txtId); if (tx){ const v = cdText(ms); if (tx.textContent !== v) tx.textContent = v; tx.classList.toggle('hot', hot); }
+}
+function syncTimer(){
+  clearTimeout(bidTimer); bidTimer = null;
+  const T = timerMs();
+  if (MESA || S.phase !== 'lot' || !S.bid || !T){ if (S && !MESA && S.phase !== 'lot') S.deadline = null; clearInterval(tickTimer); tickTimer = null; return; }
+  if (!S.deadline) S.deadline = Date.now() + T;
+  const key = curLotKey();
+  bidTimer = setTimeout(() => {
+    if (S.phase !== 'lot' || !S.bid || rolling || curLotKey() !== key) return;
+    if (Date.now() < S.deadline - 50) return syncTimer();
+    sell(S.bid.pi, S.bid.amt); S.last.auto = true; sel = null;
+    render(); window.scrollTo({top:0});
+  }, Math.max(0, S.deadline - Date.now()));
+  if (!tickTimer) tickTimer = setInterval(() => {
+    if (S.phase !== 'lot' || !S.bid || !S.deadline){ clearInterval(tickTimer); tickTimer = null; return; }
+    paintCountdown('cdbox', 'cdbar', 'cdtxt', S.deadline - Date.now(), timerMs());
+  }, 200);
 }
 
 // ---------- QR y dirección pública ----------
@@ -1407,6 +1460,7 @@ function stateFor(cid){
               sil: id >= 0 && photos[pk(id)] ? photos[pk(id)] : '', seed: Math.abs(id) % 97};
     st.need = !P.team[S.slot];
     st.bid = S.bid ? {name: S.parts[S.bid.pi].name, amt: S.bid.amt, mine: S.bid.pi === pi} : null;
+    st.timer = timerMs(); st.remain = S.bid && S.deadline ? Math.max(0, S.deadline - Date.now()) : 0;
   }
   if (S.phase === 'sold'){
     const L = S.last, p = getP(L.id);
@@ -1438,7 +1492,7 @@ function refreshLive(){
     const b = document.getElementById('livebanner');
     if (b && S.bid && !matchMedia('(prefers-reduced-motion: reduce)').matches){ b.classList.add('flash'); }
   }
-  save(); broadcast();
+  save(); syncTimer(); broadcast();
 }
 
 // ---------- Teléfono ----------
@@ -1491,6 +1545,7 @@ function phoneMain(code){
       if (PH.wasMine && !mine && m.bid && key === PH.key){ PH.msg = 'Te superaron.'; PH.ok = false; try { if (navigator.vibrate) navigator.vibrate(120); } catch(e){} }
       else if (mine && !PH.wasMine){ PH.msg = ''; }
       PH.wasMine = mine;
+      PH.deadline = m.bid && m.remain ? Date.now() + m.remain : 0; PH.total = m.timer || 0;
       draw();
     } else if (m.t === 'nack'){ PH.msg = m.msg; PH.ok = false; draw(); }
   }
@@ -1537,6 +1592,7 @@ function phoneMain(code){
       <div class="ph-base"><span class="label">Precio base</span><b class="num">${fmt(L.base)}</b></div>
       ${L.hints.length ? `<div class="hints" style="padding:0">${L.hints.map(h => `<span class="hint">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="ph-bid ${b && b.mine ? 'mine' : ''}">${b ? `<span>${b.mine ? 'Vas ganando vos' : 'Va ganando ' + esc(b.name)}</span><b class="num">${fmt(b.amt)}</b>` : `<span>Todavía nadie pujó</span>`}</div>
+      ${b && PH.deadline && PH.total ? vCountdown(PH.deadline - Date.now(), PH.total, ['ph-cd','ph-cdbar','ph-cdtxt']) : ''}
       ${ctl}
       <p class="ph-msg ${PH.ok ? 'ok' : ''}" aria-live="polite">${esc(PH.msg)}</p>
     </section>`;
@@ -1627,6 +1683,7 @@ function phoneMain(code){
     if (t.dataset.a === 'ph-edit'){ PH.editing = true; draw(); }
   });
   document.addEventListener('toggle', e => { if (e.target.id === 'ph-team') PH.teamOpen = e.target.open; }, true);
+  setInterval(() => { if (PH.deadline && PH.total) paintCountdown('ph-cd', 'ph-cdbar', 'ph-cdtxt', PH.deadline - Date.now(), PH.total); }, 200);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && PH.status !== 'open') connect(); });
   draw();
   connect();
@@ -1640,6 +1697,7 @@ if (!S.troll) S.troll = {};
 if (!S.trades) S.trades = [];
 if (!S.bp) S.bp = {};
 S.cfg = Object.assign(defaultCfg(), S.cfg);
+if (S.deadline) S.deadline = Date.now() + timerMs();   // al recargar, el tiempo vuelve a empezar
 if (typeof S.cfg.stars === 'boolean') S.cfg.stars = S.cfg.stars ? 1 : 0;
 if (!Array.isArray(S.cfg.players)) S.cfg.players = [];
 if (S.skipUsed === undefined) S.skipUsed = false;
