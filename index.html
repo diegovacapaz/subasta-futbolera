@@ -98,6 +98,7 @@ details.adv[open] summary{margin-bottom:8px}
 .photo{position:absolute;left:50%;bottom:0;transform:translateX(-50%);height:96%;width:auto;max-width:96%;object-fit:contain;
   filter:brightness(0) drop-shadow(0 0 7px var(--glow));transition:filter .7s ease}
 .photo.color{filter:none}
+.headshot.wiki{width:auto;height:auto;max-width:min(280px,80%);max-height:86%}
 .headshot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:150px;height:auto;border-radius:12px;border:3px solid var(--surface);box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .lot-num{position:absolute;top:10px;left:12px;font-family:var(--f-num);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .sil-status{position:absolute;bottom:8px;right:12px;font-size:12px;color:var(--muted)}
@@ -277,6 +278,7 @@ body.phone #app{max-width:520px}
 .ph-banner{background:var(--accent-soft);border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600;margin:0}
 .ph-join{display:grid;gap:10px}
 .ph-join input{font-size:20px;padding:14px}
+.ph-reveal{display:block;width:100%;max-height:260px;object-fit:contain;border-radius:12px;background:radial-gradient(60% 75% at 50% 18%,var(--stage-hi),var(--stage-lo) 78%)}
 .ph-who{font-family:var(--f-display);font-weight:900;font-size:40px;line-height:.95;text-transform:uppercase}
 .ph-chip{justify-self:start;border:3px solid var(--accent);color:var(--accent);border-radius:6px;padding:2px 10px;font-family:var(--f-display);font-weight:900;font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .ph-chip.troll{border-color:var(--bad);color:var(--bad)}
@@ -685,7 +687,7 @@ function mountPhoto(id, color){
     if (!document.getElementById('stage') || stage.dataset.id !== String(id)) return;
     if (!url){
       if (status) status.textContent = url === '' ? 'Sin foto de cuerpo entero' : 'No se pudo cargar la foto';
-      if (color) showHeadshot(id);
+      if (color) revealFallback(id);
       return;
     }
     const img = new Image();
@@ -693,9 +695,23 @@ function mountPhoto(id, color){
     img.alt = color ? getP(id).n : 'Silueta del jugador';
     img.referrerPolicy = 'no-referrer';
     img.onload = () => { const svg = stage.querySelector('svg'); if (svg) svg.remove(); if (status) status.textContent = ''; };
-    img.onerror = () => { img.remove(); if (status) status.textContent = 'No se pudo cargar la foto'; if (color) showHeadshot(id); };
+    img.onerror = () => { img.remove(); if (status) status.textContent = 'No se pudo cargar la foto'; if (color) revealFallback(id); };
     img.src = url;
     stage.appendChild(img);
+  });
+}
+// Al revelar, si no hay recorte de cuerpo entero: foto de Wikipedia, y si no, la de Transfermarkt.
+function revealFallback(id){
+  const stage = document.getElementById('stage'); if (!stage) return;
+  findWiki(id).then(url => {
+    if (url) broadcast();
+    const st = document.getElementById('stage');
+    if (!st || st.dataset.id !== String(id) || st.querySelector('.photo.color, .headshot')) return;
+    if (!url) return showHeadshot(id);
+    const img = new Image(); img.className = 'headshot wiki'; img.alt = getP(id).n; img.referrerPolicy = 'no-referrer';
+    img.onload = () => { const svg = st.querySelector('svg'); if (svg) svg.remove(); };
+    img.onerror = () => { img.remove(); showHeadshot(id); };
+    img.src = url; st.appendChild(img);
   });
 }
 function showHeadshot(id){
@@ -1121,7 +1137,7 @@ function vEnd(){
         ${(()=>{ const n = pt.team.filter(e=>e&&isTroll(e.id)).length; return n ? `<p class="trollnote">Se comió ${n} ${n>1?'trolleadas':'trolleada'}.</p>` : ''; })()}
         <div class="pitch"><div class="ln half"></div><div class="ln circ"></div><div class="ln boxt"></div><div class="ln boxb"></div>
           ${slots().map((s,k)=>{ const e=pt.team[k]; if(!e) return ''; const p=getP(e.id);
-            return `<div class="pl" style="left:${s.x}%;top:${s.y}%">${((e.id>=0&&photos[pk(e.id)])||p.img)?`<span class="face" style="background-image:url('${esc((e.id>=0&&photos[pk(e.id)])||p.img)}')"></span>`:''}<div class="tag ${isTroll(e.id)?'trolltag':''}"><b>${esc(p.short)}</b><span>${isTroll(e.id)?'Troll · ':''}${fmt(e.price)}</span></div></div>`; }).join('')}
+            return `<div class="pl" style="left:${s.x}%;top:${s.y}%">${faceUrl(e.id)?`<span class="face" style="background-image:url('${esc(faceUrl(e.id))}')"></span>`:''}<div class="tag ${isTroll(e.id)?'trolltag':''}"><b>${esc(p.short)}</b><span>${isTroll(e.id)?'Troll · ':''}${fmt(e.price)}</span></div></div>`; }).join('')}
         </div>
       </article>`;
     }).join('')}</div>`;
@@ -1486,7 +1502,7 @@ function stateFor(cid){
   if (S.phase === 'sold'){
     const L = S.last, p = getP(L.id);
     st.sold = {who: p.n, club: p.club, buyer: L.buyer >= 0 ? S.parts[L.buyer].name : '', price: L.price, mine: L.buyer === pi,
-               troll: isTroll(L.id), forced: !!L.forced, skipped: !!L.skipped, real: p.v, base: base(L.id)};
+               troll: isTroll(L.id), forced: !!L.forced, skipped: !!L.skipped, real: p.v, base: base(L.id), photo: faceUrl(L.id)};
   }
   return st;
 }
@@ -1514,6 +1530,41 @@ function refreshLive(){
     if (b && S.bid && !matchMedia('(prefers-reduced-motion: reduce)').matches){ b.classList.add('flash'); }
   }
   save(); syncTimer(); broadcast();
+}
+
+// ---------- Fotos de Wikipedia (respaldo cuando TheSportsDB no tiene recorte) ----------
+const wikiInflight = {};
+function faceUrl(id){
+  if (id < 0) return '';
+  return photos[pk(id)] || photos['w|' + pk(id)] || getP(id).img || '';
+}
+function yearOk(desc, by){ const m = String(desc || '').match(/\b(18|19|20)\d{2}\b/); return !m || !by || Math.abs(+m[0] - by) <= 1; }
+function findWiki(id){
+  if (id < 0) return Promise.resolve('');
+  const k = 'w|' + pk(id);
+  if (photos[k] !== undefined) return Promise.resolve(photos[k]);
+  if (wikiInflight[k]) return wikiInflight[k];
+  const p = getP(id), words = strip(p.n).toLowerCase().split(/[\s'.-]+/).filter(w => w.length >= 4);
+  wikiInflight[k] = (async () => {
+    for (const [lang, q] of [['en', p.n + ' footballer'], ['es', p.n + ' futbolista']]){
+      let j;
+      try {
+        const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&generator=search&gsrlimit=4&gsrsearch=${encodeURIComponent(q)}&prop=pageimages%7Cdescription&piprop=thumbnail&pithumbsize=480`, {signal: ctrl.signal});
+        clearTimeout(tm);
+        if (!res.ok) return null;          // error de red: no se guarda, se reintenta otra vez
+        j = await res.json();
+      } catch(e){ return null; }
+      const pages = ((j && j.query && j.query.pages) || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+      const hit = pages.find(pg => pg.thumbnail && pg.thumbnail.source
+        && /futbol|football|soccer|goalkeeper|arquero|portero/i.test(strip(pg.description || ''))
+        && (!words.length || words.some(w => strip(pg.title || '').toLowerCase().includes(w)))
+        && yearOk(pg.description, p.by));
+      if (hit){ photos[k] = hit.thumbnail.source; savePhotos(); return photos[k]; }
+    }
+    photos[k] = ''; savePhotos(); return '';
+  })().finally(() => { delete wikiInflight[k]; });
+  return wikiInflight[k];
 }
 
 // ---------- Cambiar de sala ----------
@@ -1608,7 +1659,10 @@ function phoneMain(code){
     else if (b && b.mine) ctl = `<p class="ph-banner">Vas ganando con ${fmt(b.amt)}. Si nadie te supera, es tuyo.</p>`;
     else {
       const ref = b ? b.amt : L.base;
-      const opts = b ? [['+5', r1(ref + 5)], ['+10', r1(ref + 10)]] : [['Base', ref], ['+5', r1(ref + 5)], ['+10', r1(ref + 10)]];
+      // Si el monto no es múltiplo de 5, primero se ofrece redondear; después vuelven +5 y +10.
+      const m5 = Math.abs(ref / 5 - Math.round(ref / 5)) < 1e-9, up = r1(Math.floor(ref / 5 + 1e-9) * 5 + 5);
+      const steps = m5 ? [['+5', r1(ref + 5)], ['+10', r1(ref + 10)]] : [['Redondear', up]];
+      const opts = b ? steps : [['Base', ref], ...steps];
       const min = b ? r1(b.amt + 0.5) : L.base;
       ctl = st.left < min
         ? `<p class="ph-note">No te alcanza para este lote: te quedan ${fmt(st.left)}.</p>`
@@ -1634,6 +1688,7 @@ function phoneMain(code){
       : `Se lo llevó ${esc(s.buyer)} por ${fmt(s.price)}${s.forced ? ', por sorteo' : ''}.`;
     return `<section class="ph-card">
       <span class="ph-chip ${chip[0]}">${chip[1]}</span>
+      ${s.photo ? `<img class="ph-reveal" src="${esc(s.photo)}" alt="${esc(s.who)}" referrerpolicy="no-referrer">` : ''}
       <span class="label">Era</span><div class="ph-who">${esc(s.who)}</div>
       <p class="ph-note">${esc(s.club)} · valor real ${fmt(s.real)}</p>
       <p class="ph-banner">${line}</p>
