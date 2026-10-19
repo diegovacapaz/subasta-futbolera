@@ -52,7 +52,7 @@ input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px 
 .pchip.now{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 
 /* Setup */
-.setup{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start;padding-top:8px}
+.setup{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start;padding-top:8px}
 .brand{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(56px,10vw,108px);line-height:.85;margin:0 0 14px;letter-spacing:.01em}
 .brand span{color:var(--accent);display:block}
 .lede{font-size:17px;max-width:46ch;color:var(--muted);margin:0 0 22px}
@@ -60,7 +60,7 @@ input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px 
 .rules li{display:grid;grid-template-columns:28px 1fr;gap:8px;counter-increment:r}
 .rules li::before{content:counter(r);font-family:var(--f-display);font-weight:800;font-size:22px;color:var(--accent);line-height:1.1}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:18px;min-width:0}
-.field{display:grid;gap:7px;min-width:0}
+.field{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;min-width:0}
 .field-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .stepper{display:flex;align-items:center;gap:10px}
 .stepper button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:20px;font-weight:700}
@@ -194,6 +194,12 @@ details.adv[open] summary{margin-bottom:8px}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
 
 /* Mesa para teléfonos */
+.joinbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 20px;max-width:580px}
+.joinbar label{font-size:14px;font-weight:600;color:var(--muted)}
+.joinrow{display:flex;gap:8px;flex-wrap:wrap}
+.joinrow input{width:130px;text-transform:uppercase;letter-spacing:.12em;font-family:var(--f-num);font-weight:700;font-size:18px;padding:8px 12px}
+.joinrow .secondary{padding:8px 14px}
+.joinerr{flex-basis:100%;margin:0;font-size:13px;color:var(--bad);min-height:0}
 .mesa{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 22px;max-width:580px}
 .mesa-qr{width:184px;max-width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#fff;display:grid;place-items:center}
 .mesa-qr svg{width:100%;height:100%;display:block}
@@ -279,7 +285,7 @@ details.ph-team summary{cursor:pointer;font-weight:700}
 details.ph-team .rows{margin-top:8px}
 .ph-players{display:flex;flex-wrap:wrap;gap:6px}
 .ph-players span{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;font-weight:600}
-@media (max-width:900px){ .game,.setup{grid-template-columns:1fr} }
+@media (max-width:900px){ .game,.setup{grid-template-columns:minmax(0,1fr)} }
 @media (max-width:520px){ .mesa{grid-template-columns:1fr} .mesa-qr{width:100%;max-width:260px;justify-self:center} }
 @media (max-width:480px){
   .stage{height:300px} .stage .bigpos{font-size:150px}
@@ -923,6 +929,11 @@ function vSetup(){
   const nLeg = LEGENDS.length, bigCount = D.filter(d => d[5] !== 'LEY' && d[6] >= c.minV && BIG.includes(d[4])).length;
   return `<section class="setup">
     <div>
+      <form class="joinbar" id="joinform">
+        <label for="joincode">¿Te pasaron el código de una sala?</label>
+        <div class="joinrow"><input id="joincode" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Código" aria-describedby="joinerr"><button class="secondary" type="submit">Unirme</button></div>
+        <p class="joinerr" id="joinerr" aria-live="polite"></p>
+      </form>
       <h1 class="brand">Subasta <span>Futbolera</span></h1>
       <p class="lede">Subasta ciega de jugadores reales sorteados al azar, con leyendas si quieren. Ves la silueta, la posición y el precio base. El nombre y la foto aparecen cuando cae el martillo.</p>
       <div class="mesa" id="mesa">${vMesa(false)}</div>
@@ -1199,6 +1210,16 @@ document.addEventListener('toggle', e=>{
   const t = e.target; if (t.dataset && t.dataset.team !== undefined){ t.open ? openTeams.add(+t.dataset.team) : openTeams.delete(+t.dataset.team); }
   if (t.id === 'manual') manualOpen = t.open;
 }, true);
+// Unirse a otra sala escribiendo su código: se recarga la página en modo teléfono.
+document.addEventListener('submit', e=>{
+  if (MESA || e.target.id !== 'joinform') return;
+  e.preventDefault();
+  const el = document.getElementById('joincode'), err = document.getElementById('joinerr');
+  const code = cleanCode(el.value);
+  if (code.length < 4){ err.textContent = 'El código tiene 4 letras o números.'; el.focus(); return; }
+  if (code === (NET.code || S.cfg.mesa)){ err.textContent = 'Ese es el código de esta sala. Para sumarte, escaneá el QR con el teléfono.'; return; }
+  goMesa(code);
+});
 document.addEventListener('keydown', e=>{
   if (MESA) return;
   if (e.key === 'Enter' && e.target.id === 'addname'){ e.preventDefault(); addPlayer(e.target.value); render(); const el = document.getElementById('addname'); if (el) el.focus(); return; }
@@ -1495,6 +1516,10 @@ function refreshLive(){
   save(); syncTimer(); broadcast();
 }
 
+// ---------- Cambiar de sala ----------
+const cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+function goMesa(code){ location.href = location.pathname + '?mesa=' + encodeURIComponent(code); }
+
 // ---------- Teléfono ----------
 function phoneMain(code){
   document.title = 'Subasta Futbolera · Mesa ' + code;
@@ -1560,6 +1585,9 @@ function phoneMain(code){
       <div class="ph-left"><span class="label">Te quedan</span><b class="num">${fmt(st.left)}</b></div></header>`;
   const team = st => `<details class="ph-team ph-card" id="ph-team" ${PH.teamOpen ? 'open' : ''}><summary>Mi equipo · ${st.team.filter(x => x.n).length}/11</summary>
       <div class="rows">${st.team.map((x,k) => `<div class="row ${x.n ? '' : 'empty'} ${k === st.slotNo - 1 ? 'cur' : ''}"><span class="p">${x.pos}</span><span class="n ${x.troll ? 'trolled' : ''}">${x.n ? esc(x.n) : '—'}</span><span class="num">${x.n ? fmt(x.price) : ''}</span></div>`).join('')}</div></details>`;
+  const vOther = () => `<form id="ph-other" class="joinbar" style="margin:0">
+      <label for="ph-code">¿Otra sala?</label>
+      <div class="joinrow"><input id="ph-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Código" aria-label="Código de la sala"><button class="secondary" type="submit">Ir</button></div></form>`;
   function vJoin(st){
     return `<section class="ph-card ph-join">
       <span class="label">Mesa ${esc(code)}</span>
@@ -1570,6 +1598,7 @@ function phoneMain(code){
       </form>
       <p class="ph-msg">${esc(PH.msg)}</p>
       ${st && st.players && st.players.length ? `<span class="label">Ya están</span><div class="ph-players">${st.players.map(n => `<span>${esc(n)}</span>`).join('')}</div>` : ''}
+      ${vOther()}
     </section>`;
   }
   function vLotPh(st){
@@ -1616,7 +1645,7 @@ function phoneMain(code){
       `<p class="ph-banner">${PH.status === 'nohost' ? `No encontramos la mesa ${esc(code)}. Revisá que la compu tenga la subasta abierta. Reintentando…`
         : PH.status === 'nolib' ? 'Este navegador no puede conectarse a la mesa.'
         : PH.status === 'lost' ? 'Se cortó la conexión. Reconectando…' : `Conectando con la mesa ${esc(code)}…`}</p>`;
-    if (!st) return `<div class="ph">${conn}${!PH.name && PH.status === 'open' ? vJoin(null) : ''}</div>`;
+    if (!st) return `<div class="ph">${conn}${!PH.name && PH.status === 'open' ? vJoin(null) : ''}${PH.status === 'nohost' ? `<section class="ph-card">${vOther()}</section>` : ''}</div>`;
     if (st.phase === 'setup' && (!st.joined || PH.editing)) return `<div class="ph">${conn}${vJoin(st)}</div>`;
     if (st.phase === 'setup') return `<div class="ph">${conn}
       <section class="ph-card"><span class="label">Mesa ${esc(code)}</span><div class="ph-who">Listo, ${esc(st.name)}</div>
@@ -1624,7 +1653,7 @@ function phoneMain(code){
         <span class="label">En la mesa</span><div class="ph-players">${st.players.map(n => `<span>${esc(n)}</span>`).join('')}</div>
         <button class="secondary" data-a="ph-edit">Cambiar mi nombre</button></section></div>`;
     if (st.phase === 'closed') return `<div class="ph">${conn}<section class="ph-card"><div class="ph-who">La partida ya empezó</div>
-      <p class="ph-note">Solo pueden pujar los que se sumaron antes de arrancar. Pedí que te agreguen en la próxima.</p></section></div>`;
+      <p class="ph-note">Solo pueden pujar los que se sumaron antes de arrancar. Pedí que te agreguen en la próxima.</p>${vOther()}</section></div>`;
     let body = '';
     if (st.phase === 'lot') body = vLotPh(st);
     else if (st.phase === 'sold') body = vSoldPh(st);
@@ -1664,6 +1693,11 @@ function phoneMain(code){
 
   document.addEventListener('submit', e => {
     e.preventDefault();
+    if (e.target.id === 'ph-other'){
+      const c = cleanCode(document.getElementById('ph-code').value);
+      if (c.length >= 4 && c !== code) goMesa(c);
+      return;
+    }
     if (e.target.id === 'ph-joinform'){
       const name = cleanName(document.getElementById('ph-name').value);
       if (!name){ PH.msg = 'Escribí tu nombre.'; draw(); return; }
