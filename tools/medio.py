@@ -48,9 +48,10 @@ def blanco(rgba):
     return f
 
 
-def limpiar(alpha, centro):
+def limpiar(alpha, centro, bordes=False):
     """Deja solo la mancha de la persona y descarta formas que no parecen un medio cuerpo.
-    Devuelve el canal alfa limpio (PIL L) o None."""
+    Con bordes=True (fotos con fondo) también descarta si la silueta se pega a los costados del encuadre,
+    que suele ser otra persona al lado o el fondo que quedó pegado. Devuelve el canal alfa limpio o None."""
     import cv2
     import numpy as np
     from PIL import Image
@@ -68,6 +69,8 @@ def limpiar(alpha, centro):
         fg = (a > 128).astype('uint8')
     cy, cx = int(min(centro[1], a.shape[0] - 1)), int(min(centro[0], a.shape[1] - 1))
     if not fg[cy, cx]:               # la cara tiene que estar dentro de la silueta
+        return None
+    if bordes and max(fg[:, 0].mean(), fg[:, -1].mean()) > 0.35:
         return None
     cs, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     c = max(cs, key=cv2.contourArea)

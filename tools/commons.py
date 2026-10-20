@@ -2,7 +2,8 @@
 """Completa con fotos de Wikimedia Commons a quienes TheSportsDB no les da un medio cuerpo.
 
 Para cada jugador (en orden de valor) que ya fue revisado en TheSportsDB y no tiene tsdb/m:
-  1. Busca sus fotos en Commons y baja hasta 10 candidatas.
+  1. Lo identifica en Wikidata (nombre, que sea futbolista, año de nacimiento) y toma las fotos de su
+     categoría en Commons, así no se cuela otra persona con el mismo nombre. Baja hasta 12 candidatas.
   2. Se queda con las que tienen una sola persona, llegan al menos al pecho y tienen fondo simple
      (pocos bordes alrededor). Para las leyendas prefiere fotos de los años en que jugaban.
   3. Recorta la mejor de la cintura para arriba, le quita el fondo y controla que la silueta sea prolija.
@@ -16,39 +17,105 @@ from siluetas import get, strip   # noqa: E402
 import medio                      # noqa: E402
 
 API = 'https://commons.wikimedia.org/w/api.php?'
-OK, NO = 'c1', 'nc1'
-MAX_CAND = 10
+OK, NO = 'c2', 'nc2'   # versión 2: fotos de la categoría del jugador en Commons (vía Wikidata)
+MAX_CAND = 12
+
+
+WD = 'https://www.wikidata.org/w/api.php?'
+FUTBOL = re.compile(r'football|soccer|futbol|calcio|fussball|voetbal|goalkeeper|arquero|portero', re.I)
+
+
+def jget(base, **params):
+    return json.loads(get(base + urllib.parse.urlencode(dict(params, format='json'))))
+
+
+def ficha_wikidata(j):
+    """Ficha de Wikidata del jugador (por nombre, descripción futbolera y año de nacimiento). None si falló la red."""
+    try:
+        r = jget(WD, action='wbsearchentities', search=j['n'], language='en', uselang='en', type='item', limit=8)
+    except Exception:
+        return None
+    ids = [x['id'] for x in r.get('search', []) if FUTBOL.search(strip(x.get('description', '')))]
+    if not ids:
+        return {}
+    try:
+        ents = jget(WD, action='wbgetentities', ids='|'.join(ids), props='claims').get('entities', {})
+    except Exception:
+        return None
+    for i in ids:
+        cl = ents.get(i, {}).get('claims', {})
+        def val(p):
+            try:
+                return cl[p][0]['mainsnak']['datavalue']['value']
+            except (KeyError, IndexError):
+                return None
+        nac = val('P569')
+        anio = int(nac['time'][1:5]) if isinstance(nac, dict) and nac.get('time', '')[1:5].isdigit() else None
+        if anio and j['by'] and abs(anio - j['by']) > 1:
+            continue
+        return {'qid': i, 'cat': val('P373'), 'img': val('P18')}
+    return {}
+
+
+def archivos(**gen):
+    """Archivos de Commons (con miniatura) según un generador de la API."""
+    data = jget(API, action='query', formatversion=2, prop='imageinfo', iiprop='url|size|mime', iiurlwidth=900, **gen)
+    out = []
+    for p in (data.get('query') or {}).get('pages') or []:
+        ii = (p.get('imageinfo') or [{}])[0]
+        if p.get('ns') == 6 and ii.get('mime') in ('image/jpeg', 'image/png') and min(ii.get('width', 0), ii.get('height', 0)) >= 300:
+            out.append({'title': p['title'], 'thumb': ii.get('thumburl') or ii.get('url')})
+    return out
 
 
 def candidatas(j):
-    """Fotos de Commons que mencionan al jugador en el nombre del archivo. None si falló la red."""
+    """Fotos de Commons del jugador: las de su categoría en Commons (vía Wikidata, así es seguro que es él)
+    y su foto principal. Si no tiene ficha en Wikidata, búsqueda por nombre completo. None si falló la red."""
     toks = [t for t in re.split(r"[\s'.-]+", strip(j['n']).lower()) if len(t) >= 3]
-    if not toks:
-        return []
-    url = API + urllib.parse.urlencode({
-        'action': 'query', 'format': 'json', 'formatversion': 2, 'generator': 'search', 'gsrnamespace': 6,
-        'gsrsearch': f'"{j["n"]}"', 'gsrlimit': 25, 'prop': 'imageinfo', 'iiprop': 'url|size|mime', 'iiurlwidth': 900})
+    ficha = ficha_wikidata(j)
+    if ficha is None:
+        return None
+    vistos, cands = set(), []
+    def sumar(lista):
+        for c in lista:
+            if c['title'] not in vistos:
+                vistos.add(c['title'])
+                cands.append(c)
     try:
-        data = json.loads(get(url))
+        if ficha.get('img'):
+            sumar(archivos(titles='File:' + ficha['img']))
+        if ficha.get('cat'):
+            cat = 'Category:' + ficha['cat']
+            sumar(archivos(generator='categorymembers', gcmtitle=cat, gcmtype='file', gcmlimit=60))
+            subs = jget(API, action='query', list='categorymembers', cmtitle=cat, cmtype='subcat', cmlimit=30)
+            subs = [x['title'] for x in (subs.get('query') or {}).get('categorymembers', [])]
+            def de_epoca(t):
+                m = re.search(r'(19[0-9]{2}|20[0-2][0-9])', t)
+                return 0 if (m and j['by'] and 17 <= int(m.group(1)) - j['by'] <= 37) else 1
+            for sc in sorted(subs, key=de_epoca)[:4]:
+                sumar(archivos(generator='categorymembers', gcmtitle=sc, gcmtype='file', gcmlimit=30))
+        if not ficha and len(toks) >= 2:   # sin ficha: solo búsqueda con el nombre completo en el archivo
+            for c in archivos(generator='search', gsrnamespace=6, gsrsearch=f'"{j["n"]}"', gsrlimit=25):
+                if all(t in strip(c['title']).lower() for t in toks):
+                    sumar([c])
     except Exception:
         return None
     out = []
-    for p in sorted((data.get('query') or {}).get('pages') or [], key=lambda p: p.get('index', 0)):
-        ii = (p.get('imageinfo') or [{}])[0]
-        if ii.get('mime') not in ('image/jpeg', 'image/png') or min(ii.get('width', 0), ii.get('height', 0)) < 300:
-            continue
-        t = strip(p.get('title', '')).lower()
-        if toks[-1] not in t:                       # el apellido tiene que estar en el nombre del archivo
-            continue
-        if re.search(r'logo|signature|firma|autograph|stadium|estadio|tomb|grave|statue|estatua|mural|card|cromo|sticker', t):
+    for c in cands:
+        t = strip(c['title']).lower()
+        if re.search(r'logo|signature|firma|autograph|stadium|estadio|tomb|grave|statue|estatua|mural|card|cromo|sticker|stamp|sello|poster|cartel|coin|moneda', t):
             continue
         anio = re.search(r'\b(19[0-9]{2}|20[0-2][0-9])\b', t)
-        out.append({'title': p['title'], 'thumb': ii.get('thumburl') or ii.get('url'),
-                    'anio': int(anio.group(1)) if anio else None,
-                    'nombre_completo': all(x in t for x in toks)})
-        if len(out) >= MAX_CAND:
-            break
-    return out
+        c['anio'] = int(anio.group(1)) if anio else None
+        c['nombre_completo'] = all(x in t for x in toks)
+        out.append(c)
+    # primero las de su época (para elegir qué bajar), después el resto
+    def orden(c):
+        if c['anio'] and j['by'] and 17 <= c['anio'] - j['by'] <= 37:
+            return 0
+        return 1 if not c['anio'] else 2
+    out.sort(key=orden)
+    return out[:MAX_CAND]
 
 
 def fondo_simple(rgb, cara):
@@ -150,7 +217,7 @@ def main():
         for (puntos, crop, centro), c in evaluadas[:3]:
             for s in sessions:
                 cut = remove(crop, session=s, post_process_mask=True)
-                a = medio.limpiar(cut.getchannel('A'), centro)
+                a = medio.limpiar(cut.getchannel('A'), centro, bordes=True)
                 if a is not None:
                     cut.putalpha(a)
                     listo = (cut, c)
@@ -167,6 +234,11 @@ def main():
         else:
             indice.pop(k, None)
             estado[k] = NO
+            for d, ext in (('m', '.png'), ('f', '.webp')):   # por si había una de la versión anterior
+                try:
+                    os.remove(os.path.join(args.salida, d, k + ext))
+                except OSError:
+                    pass
             stats['sin foto'] += 1
         hechos += 1
         if hechos % 25 == 0:
