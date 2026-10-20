@@ -2,7 +2,7 @@ name: Siluetas
 
 # Genera sil/<clave>.png para cada jugador de tools/jugadores.json.
 # Corre sola cuando cambia la lista o el script, y se puede lanzar a mano desde la pestaña Actions.
-# Si no termina en una corrida, guarda lo hecho y se vuelve a lanzar sola para seguir.
+# Guarda lo hecho cada 25 minutos. Si no termina en una corrida, se vuelve a lanzar sola para seguir.
 on:
   workflow_dispatch:
     inputs:
@@ -44,24 +44,34 @@ jobs:
           path: ~/.u2net
           key: u2net-human-seg-v1
 
-      - name: Generar siluetas
+      - name: Generar y guardar siluetas
         id: gen
-        run: |
-          EXTRA=""
-          if [ "${{ github.event.inputs.reintentar }}" = "si" ]; then EXTRA="--reintentar"; fi
-          python tools/siluetas.py --minutos "${{ github.event.inputs.minutos || '320' }}" $EXTRA
-
-      - name: Guardar en el repositorio
-        if: always()
+        env:
+          MINUTOS: ${{ github.event.inputs.minutos || '320' }}
+          REINTENTAR: ${{ github.event.inputs.reintentar || 'no' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add sil
-          if git diff --cached --quiet; then echo "Nada nuevo"; exit 0; fi
-          git commit -q -m "Siluetas: ${{ steps.gen.outputs.siluetas }} listas, faltan ${{ steps.gen.outputs.pendientes }}"
-          for i in 1 2 3; do
-            git pull --rebase -q origin main && git push -q origin main && break
-            sleep 10
+          EXTRA=""; [ "$REINTENTAR" = "si" ] && EXTRA="--reintentar"
+          FIN=$(( $(date +%s) + MINUTOS * 60 ))
+          while :; do
+            RESTA=$(( (FIN - $(date +%s)) / 60 ))
+            [ "$RESTA" -lt 3 ] && break
+            T=$(( RESTA < 25 ? RESTA : 25 ))
+            python tools/siluetas.py --minutos "$T" --resumen /tmp/resumen.json $EXTRA
+            EXTRA=""
+            LISTAS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['siluetas'])")
+            PEND=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['pendientes'])")
+            HECHOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['hechos'])")
+            git add sil
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Siluetas: $LISTAS listas, faltan $PEND"
+              for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin main && break; sleep 10; done
+            fi
+            echo "pendientes=$PEND" >> "$GITHUB_OUTPUT"
+            echo "hechos=$HECHOS" >> "$GITHUB_OUTPUT"
+            [ "$PEND" = "0" ] && break
+            [ "$HECHOS" = "0" ] && break
           done
 
       - name: Seguir si faltan

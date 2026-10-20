@@ -87,6 +87,7 @@ def main():
     ap.add_argument('--minutos', type=float, default=320, help='tiempo máximo de trabajo')
     ap.add_argument('--limite', type=int, default=0, help='máximo de jugadores en esta corrida (0 = todos)')
     ap.add_argument('--reintentar', action='store_true', help='volver a probar los que no tuvieron foto')
+    ap.add_argument('--resumen', default='', help='archivo donde dejar el resumen en JSON')
     args = ap.parse_args()
 
     from rembg import new_session
@@ -151,10 +152,8 @@ def main():
     pendientes = sum(1 for j in jug if estado.get(j['k']) is None)
     total_ok = sum(1 for v in estado.values() if v == 'ok')
     print(f'Listo: {hechos} procesados en esta corrida {stats}. Siluetas: {total_ok}. Pendientes: {pendientes}.')
-    out = os.environ.get('GITHUB_OUTPUT')
-    if out:
-        with open(out, 'a') as f:
-            f.write(f'pendientes={pendientes}\nsiluetas={total_ok}\nhechos={hechos}\n')
+    if args.resumen:
+        json.dump({'pendientes': pendientes, 'siluetas': total_ok, 'hechos': hechos}, open(args.resumen, 'w'))
 
 
 if __name__ == '__main__':
