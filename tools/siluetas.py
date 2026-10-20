@@ -120,6 +120,13 @@ def silueta(raw, sessions):
             keep = 1 + int(np.argmax(np.bincount(lab.ravel())[1:]))
         mask = cv2.dilate((lab == keep).astype('uint8'), np.ones((5, 5), 'uint8'))
         a = (a * mask).astype('uint8')
+    # Un busto es una forma compacta. Si no (brazos en alto, objetos delante), mejor la silueta genérica.
+    cs, _ = cv2.findContours((a > 128).astype('uint8'), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if cs:
+        c = max(cs, key=cv2.contourArea)
+        hull = cv2.contourArea(cv2.convexHull(c))
+        if hull and cv2.contourArea(c) / hull < 0.78:
+            return None
     ys, xs = np.where(a > 40)
     a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     h, w = a.shape
