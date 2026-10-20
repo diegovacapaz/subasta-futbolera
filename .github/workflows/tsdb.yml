@@ -1,0 +1,67 @@
+name: Recortes TheSportsDB
+
+# Baja de la API de TheSportsDB los recortes (fotos sin fondo) de cada jugador de tools/jugadores.json
+# y guarda en tsdb/ las siluetas de cuerpo entero y de busto y la foto a color.
+# Respeta el límite de la clave gratuita; guarda cada 25 minutos y se vuelve a lanzar sola si faltan.
+# Para usar una clave paga, agregá el secreto TSDB_KEY en Settings → Secrets and variables → Actions.
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: Minutos máximos de trabajo por corrida
+        default: '320'
+  push:
+    branches: [main]
+    paths: ['tools/tsdb.py']
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: tsdb
+  cancel-in-progress: false
+
+jobs:
+  tsdb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias
+        run: pip install "opencv-python-headless==4.10.0.84" pillow numpy
+      - name: Bajar y guardar recortes
+        id: gen
+        env:
+          MINUTOS: ${{ github.event.inputs.minutos || '320' }}
+          TSDB_KEY: ${{ secrets.TSDB_KEY }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          FIN=$(( $(date +%s) + MINUTOS * 60 ))
+          while :; do
+            RESTA=$(( (FIN - $(date +%s)) / 60 ))
+            [ "$RESTA" -lt 3 ] && break
+            T=$(( RESTA < 25 ? RESTA : 25 ))
+            python tools/tsdb.py --minutos "$T" --resumen /tmp/resumen.json
+            REC=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['recortes'])")
+            PEND=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['pendientes'])")
+            HECHOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['hechos'])")
+            git add tsdb
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Recortes TheSportsDB: $REC jugadores con recorte, faltan revisar $PEND"
+              for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
+            fi
+            echo "pendientes=$PEND" >> "$GITHUB_OUTPUT"
+            echo "hechos=$HECHOS" >> "$GITHUB_OUTPUT"
+            [ "$PEND" = "0" ] && break
+            [ "$HECHOS" = "0" ] && break
+          done
+      - name: Seguir si faltan
+        if: success() && steps.gen.outputs.pendientes != '0' && steps.gen.outputs.hechos != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tsdb.yml --ref main -f minutos="${{ github.event.inputs.minutos || '320' }}"

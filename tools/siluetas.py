@@ -65,7 +65,7 @@ def wiki(name, by):
 
 def encuadre(img):
     """Recorta un busto alrededor de la cara más grande (sirve para fotos de cuerpo entero).
-    Devuelve la imagen recortada, el centro de la cara (o None si no encontró caras) y si parece foto grupal."""
+    Devuelve la imagen recortada, el centro de la cara (o None), si parece foto grupal y la caja usada."""
     import cv2
     import numpy as np
     g = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
@@ -73,14 +73,14 @@ def encuadre(img):
     lado = max(24, min(img.size) // 12)
     caras = det.detectMultiScale(g, scaleFactor=1.1, minNeighbors=5, minSize=(lado, lado))
     if len(caras) == 0:
-        return img, None, False
+        return img, None, False, None
     caras = sorted(caras, key=lambda f: -f[2] * f[3])
     grupal = len(caras) > 1 and caras[1][2] * caras[1][3] >= 0.35 * caras[0][2] * caras[0][3]
     x, y, w, h = caras[0]
     cx = x + w / 2
     caja = (max(0, cx - 1.7 * w), max(0, y - 0.9 * h), min(img.width, cx + 1.7 * w), min(img.height, y + 3.2 * h))
     caja = tuple(int(round(v)) for v in caja)
-    return img.crop(caja), (cx - caja[0], y + h / 2 - caja[1]), grupal
+    return img.crop(caja), (cx - caja[0], y + h / 2 - caja[1]), grupal, caja
 
 
 def silueta(raw, sessions):
@@ -92,7 +92,7 @@ def silueta(raw, sessions):
     if max(img.size) < 320:   # las fotos chicas recortan mejor un poco agrandadas
         k = 320 / max(img.size)
         img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
-    img, cara, grupal = encuadre(img)
+    img, cara, grupal, _ = encuadre(img)
     if grupal:
         return None   # en una foto con varios, la silueta mezcla personas
     if max(img.size) < 320:

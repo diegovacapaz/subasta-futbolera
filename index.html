@@ -95,6 +95,7 @@ details.adv[open] summary{margin-bottom:8px}
   background:radial-gradient(60% 75% at 50% 18%,var(--stage-hi),var(--stage-lo) 78%)}
 .stage .bigpos{position:absolute;inset:auto 0 -18px 0;text-align:center;font-family:var(--f-display);font-weight:900;font-size:220px;line-height:1;color:var(--stage-text);user-select:none}
 .stage svg{position:absolute;left:50%;bottom:0;transform:translateX(-50%);height:80%;width:auto;max-width:100%}
+.photo.busto{height:84%}
 .photo{position:absolute;left:50%;bottom:0;transform:translateX(-50%);height:96%;width:auto;max-width:96%;object-fit:contain;
   filter:brightness(0) drop-shadow(0 0 7px var(--glow));transition:filter .7s ease}
 .photo.color{filter:none}
@@ -347,7 +348,7 @@ const THIS_YEAR = new Date().getFullYear();
 let S, sel = null, confirmReset = false, showQR = false, manualOpen = false, rolling = false; const openTeams = new Set();
 function defaultCfg(){
   return {players:[], publicUrl:'', mesa:'', budget:300, formation:'4-3-3', hints:true,
-          leagues:Object.keys(LEAGUES), minV:10, stars:2, legends:1, big:false, troll:15, market:true, timer:10, blind:false, bMin:20, bMax:60};
+          leagues:Object.keys(LEAGUES), minV:10, stars:2, legends:1, big:false, troll:15, market:true, timer:10, cuerpo:true, blind:false, bMin:20, bMax:60};
 }
 function fresh(cfg){
   return {phase:'setup', cfg: cfg || defaultCfg(), parts:[], slot:0, queue:[], used:[], extras:[], lotNo:1, last:null, hint:0, votes:[], hist:[], troll:{}, trades:[], bp:{}, skipUsed:false, bid:null, bids:[]};
@@ -441,10 +442,22 @@ const strip = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'');
 function savePhotos(){ try{ localStorage.setItem(PKEY, JSON.stringify(photos)); }catch(e){} }
 const ASSET = /^https?:$/.test(location.protocol) ? new URL('.', location.href).href : 'https://diegovacapaz.github.io/subasta-futbolera/';
 function silKey(id){ if (id < 0) return ''; const d = D[id]; return d[7] ? 'tm' + d[7].split('-')[0] : (d[11] || ''); }
-const silUrl = id => silKey(id) ? ASSET + 'sil/' + silKey(id) + '.png' : '';
+// Recortes de TheSportsDB guardados en tsdb/ (c = silueta de cuerpo entero, b = de busto, f = foto a color sin fondo).
+let TSDB = {};
+const tsdbHas = (id, x) => !!(silKey(id) && (TSDB[silKey(id)] || '').includes(x));
+function silUrl(id){
+  const k = silKey(id); if (!k) return '';
+  if (S && S.cfg && S.cfg.cuerpo && tsdbHas(id, 'c')) return ASSET + 'tsdb/c/' + k + '.png';
+  if (tsdbHas(id, 'b')) return ASSET + 'tsdb/b/' + k + '.png';
+  return ASSET + 'sil/' + k + '.png';
+}
+const cutUrl = id => tsdbHas(id, 'f') ? ASSET + 'tsdb/f/' + silKey(id) + '.webp' : '';
 const bigTM = u => u.replace('/portrait/header/', '/portrait/big/');
 let FOTOS = {};
-function loadFotos(){ try { fetch(ASSET + 'sil/fotos.json').then(r => r.ok ? r.json() : {}).then(j => { FOTOS = j || {}; }).catch(() => {}); } catch(e){} }
+function loadFotos(){
+  try { fetch(ASSET + 'sil/fotos.json').then(r => r.ok ? r.json() : {}).then(j => { FOTOS = j || {}; }).catch(() => {}); } catch(e){}
+  try { fetch(ASSET + 'tsdb/indice.json').then(r => r.ok ? r.json() : {}).then(j => { TSDB = j || {}; if (S && S.phase !== 'setup') render(); }).catch(() => {}); } catch(e){}
+}
 function revealUrl(id){
   if (id < 0) return Promise.resolve('');
   const p = getP(id);
@@ -457,10 +470,18 @@ function mountPhoto(id, color){
   const stage = document.getElementById('stage'); if (!stage || id < 0) return;
   if (!color){
     const u = silUrl(id); if (!u) return;
-    const img = new Image(); img.className = 'photo'; img.alt = 'Silueta del jugador';
+    const img = new Image(); img.className = 'photo' + (u.includes('/tsdb/c/') ? '' : ' busto'); img.alt = 'Silueta del jugador';
     img.onload = () => { const svg = stage.querySelector('svg'); if (svg) svg.remove(); };
     img.onerror = () => img.remove();
     img.src = u; stage.appendChild(img);
+    return;
+  }
+  const cut = cutUrl(id);
+  if (cut){   // recorte a color de TheSportsDB: se revela la silueta en color
+    const img = new Image(); img.className = 'photo color'; img.alt = getP(id).n;
+    img.onload = () => { const svg = stage.querySelector('svg'); if (svg) svg.remove(); };
+    img.onerror = () => { img.remove(); TSDB[silKey(id)] = (TSDB[silKey(id)] || '').replace('f', ''); mountPhoto(id, true); };
+    img.src = cut; stage.appendChild(img);
     return;
   }
   revealUrl(id).then(u => {
@@ -761,11 +782,12 @@ function vSetup(){
         <div class="seg">${[0,10,15,20].map(v=>`<button data-a="timer" data-v="${v}" aria-pressed="${c.timer===v}">${v ? v + ' s' : 'No'}</button>`).join('')}</div>
         <p class="note">${c.timer ? `Después de cada puja desde el teléfono, si nadie la supera en ${c.timer} segundos, se vende sola al que va ganando.` : 'Las pujas desde el teléfono se cierran solo con ¡Vendido!.'}</p>
       </div>
+      <label class="check"><input id="cuerpo" type="checkbox" ${c.cuerpo?'checked':''}> Siluetas de cuerpo entero cuando haya (si no, todas de busto)</label>
       <label class="check"><input id="market" type="checkbox" ${c.market?'checked':''}> Ofrecer mercado de pases al terminar cada posición</label>
       <label class="check"><input id="hints" type="checkbox" ${c.hints?'checked':''}> Permitir pistas (edad, nacionalidad, liga)</label>
       <div class="field" id="startbox">${vStartBox()}</div>
       <details class="adv"><summary>Fotos y datos</summary>
-        <p class="note">Las siluetas de busto se generan aparte a partir de las fotos de Transfermarkt y Wikipedia, y se guardan en este mismo sitio. Si un jugador no tiene foto, aparece una silueta genérica. Al revelar se muestra su foto de Transfermarkt, o la de Wikipedia para las leyendas.</p>
+        <p class="note">Las siluetas se generan aparte y se guardan en este mismo sitio: de cuerpo entero con los recortes de TheSportsDB, y de busto con las fotos de Transfermarkt y Wikipedia. Si un jugador no tiene ninguna, aparece una silueta genérica. Al revelar se muestra el recorte a color, o la foto de Transfermarkt o Wikipedia.</p>
       </details>
       <p class="note">${D.length.toLocaleString('es-AR')} jugadores: ${(D.length-LEGENDS.length).toLocaleString('es-AR')} actuales del dataset de Transfermarkt (temporada 2025, valores en USD a 1,16 por euro) y ${LEGENDS.length} leyendas.</p>
     </div>
@@ -955,6 +977,7 @@ document.addEventListener('input', e=>{
   else if (t.id === 'hints'){ S.cfg.hints = t.checked; save(); }
   else if (t.id === 'big'){ S.cfg.big = t.checked; render(); }
   else if (t.id === 'market'){ S.cfg.market = t.checked; save(); }
+  else if (t.id === 'cuerpo'){ S.cfg.cuerpo = t.checked; save(); }
   else if (t.id === 'bmin' || t.id === 'bmax'){ const v = parseInt(t.value, 10); if (!isNaN(v) && v >= 0){ S.cfg[t.id === 'bmin' ? 'bMin' : 'bMax'] = v; save(); } }
   else if (t.id === 'price') updateBid();
   else if (t.id === 'm-amt'){ M.amt = parseFloat(t.value) || 0; updateMarketUI(); }
@@ -1250,7 +1273,7 @@ function stateFor(cid){
   if (S.phase === 'sold'){
     const L = S.last, p = getP(L.id);
     st.sold = {who: p.n, club: p.club, buyer: L.buyer >= 0 ? S.parts[L.buyer].name : '', price: L.price, mine: L.buyer === pi,
-               troll: isTroll(L.id), forced: !!L.forced, skipped: !!L.skipped, real: p.v, base: base(L.id), photo: faceUrl(L.id)};
+               troll: isTroll(L.id), forced: !!L.forced, skipped: !!L.skipped, real: p.v, base: base(L.id), photo: cutUrl(L.id) || faceUrl(L.id)};
   }
   return st;
 }
@@ -1284,7 +1307,7 @@ function refreshLive(){
 const wikiInflight = {};
 function faceUrl(id){
   if (id < 0) return '';
-  return getP(id).img || FOTOS[silKey(id)] || photos['w|' + pk(id)] || '';
+  return getP(id).img || FOTOS[silKey(id)] || photos['w|' + pk(id)] || cutUrl(id) || '';
 }
 function yearOk(desc, by){ const m = String(desc || '').match(/\b(18|19|20)\d{2}\b/); return !m || !by || Math.abs(+m[0] - by) <= 1; }
 function findWiki(id){
