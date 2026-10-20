@@ -31,22 +31,69 @@
   "n": "Diego Maradona",
   "k": "n-diego-maradona-1960",
   "intentos": [],
-  "wikipedia": "https://upload.wikimedia.org/wikipedia/commons/4/48/Argentina_celebrando_copa_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
-  "fuente": "https://upload.wikimedia.org/wikipedia/commons/4/48/Argentina_celebrando_copa_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "wikipedia": [
+   "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/Maradona-Mundial_86_con_la_copa.JPG/500px-Maradona-Mundial_86_con_la_copa.JPG?utm_source=es.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+  ],
+  "fuente": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/Maradona-Mundial_86_con_la_copa.JPG/500px-Maradona-Mundial_86_con_la_copa.JPG?utm_source=es.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
   "silueta": true
  },
  {
   "n": "Juan Román Riquelme",
   "k": "n-juan-roman-riquelme-1978",
   "intentos": [],
-  "wikipedia": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "wikipedia": [
+   "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+   "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=es.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled"
+  ],
   "fuente": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "silueta": true
+ },
+ {
+  "n": "Pelé",
+  "k": "n-pele-1940",
+  "intentos": [],
+  "wikipedia": [
+   "https://upload.wikimedia.org/wikipedia/commons/5/5e/Pele_con_brasil_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled"
+  ],
+  "fuente": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Pele_con_brasil_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "silueta": false
+ },
+ {
+  "n": "Ricardo Bochini",
+  "k": "n-ricardo-bochini-1954",
+  "intentos": [],
+  "wikipedia": [
+   "https://upload.wikimedia.org/wikipedia/commons/b/bd/Bocho.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled"
+  ],
+  "fuente": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Bocho.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "silueta": true
+ },
+ {
+  "n": "Martín Palermo",
+  "k": "n-martin-palermo-1973",
+  "intentos": [],
+  "wikipedia": [
+   "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01_%28cropped%29.jpg/500px-Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+   "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01.jpg/500px-Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01.jpg?utm_source=es.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+  ],
+  "fuente": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01_%28cropped%29.jpg/500px-Everton_-_Uni%C3%B3n_Espa%C3%B1ola%2C_2018-04-28_-_Mart%C3%ADn_Palermo_-_01_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "silueta": true
+ },
+ {
+  "n": "Lev Yashin",
+  "k": "n-lev-yashin-1929",
+  "intentos": [],
+  "wikipedia": [
+   "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/LevYashin.JPG/500px-LevYashin.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+   "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/LevYashin.JPG/500px-LevYashin.JPG?utm_source=es.wikipedia.org&utm_campaign=api&utm_content=thumbnail"
+  ],
+  "fuente": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/LevYashin.JPG/500px-LevYashin.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
   "silueta": true
  },
  {
   "n": "Andrés Castrín",
   "k": "n-andres-castrin-2003",
   "intentos": [],
-  "wikipedia": ""
+  "wikipedia": []
  }
 ]
