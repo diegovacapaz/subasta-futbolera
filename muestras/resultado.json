@@ -1,0 +1,52 @@
+[
+ {
+  "n": "Lamine Yamal",
+  "k": "tm937958",
+  "intentos": [],
+  "fuente": "https://img.a.transfermarkt.technology/portrait/big/937958-1773173768.jpg?lm=1",
+  "silueta": true
+ },
+ {
+  "n": "Erling Haaland",
+  "k": "tm418560",
+  "intentos": [],
+  "fuente": "https://img.a.transfermarkt.technology/portrait/big/418560-1709108116.png?lm=1",
+  "silueta": true
+ },
+ {
+  "n": "Lionel Messi",
+  "k": "tm28003",
+  "intentos": [],
+  "fuente": "https://img.a.transfermarkt.technology/portrait/big/28003-1771694720.jpg?lm=1",
+  "silueta": true
+ },
+ {
+  "n": "Leandro Paredes",
+  "k": "tm166237",
+  "intentos": [],
+  "fuente": "https://img.a.transfermarkt.technology/portrait/big/166237-1692881087.jpg?lm=1",
+  "silueta": true
+ },
+ {
+  "n": "Diego Maradona",
+  "k": "n-diego-maradona-1960",
+  "intentos": [],
+  "wikipedia": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/Stadio_Maradona_Serie_A.jpg/500px-Stadio_Maradona_Serie_A.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "fuente": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/Stadio_Maradona_Serie_A.jpg/500px-Stadio_Maradona_Serie_A.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "silueta": false
+ },
+ {
+  "n": "Juan Román Riquelme",
+  "k": "n-juan-roman-riquelme-1978",
+  "intentos": [],
+  "wikipedia": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "fuente": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Juan_Rom%C3%A1n_Riquelme_-_2019.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "silueta": true
+ },
+ {
+  "n": "Andrés Castrín",
+  "k": "n-andres-castrin-2003",
+  "intentos": [],
+  "wikipedia": ""
+ }
+]
