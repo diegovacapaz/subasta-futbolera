@@ -1,0 +1,71 @@
+name: Siluetas
+
+# Genera sil/<clave>.png para cada jugador de tools/jugadores.json.
+# Corre sola cuando cambia la lista o el script, y se puede lanzar a mano desde la pestaña Actions.
+# Si no termina en una corrida, guarda lo hecho y se vuelve a lanzar sola para seguir.
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: Minutos máximos de trabajo por corrida
+        default: '320'
+      reintentar:
+        description: Volver a probar los jugadores que no tuvieron foto (si / no)
+        default: 'no'
+  push:
+    branches: [main]
+    paths: ['tools/jugadores.json', 'tools/siluetas.py']
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: siluetas
+  cancel-in-progress: false
+
+jobs:
+  siluetas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install "rembg[cpu]==2.0.66" pillow numpy
+
+      - name: Modelo de recorte en caché
+        uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-human-seg-v1
+
+      - name: Generar siluetas
+        id: gen
+        run: |
+          EXTRA=""
+          if [ "${{ github.event.inputs.reintentar }}" = "si" ]; then EXTRA="--reintentar"; fi
+          python tools/siluetas.py --minutos "${{ github.event.inputs.minutos || '320' }}" $EXTRA
+
+      - name: Guardar en el repositorio
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sil
+          if git diff --cached --quiet; then echo "Nada nuevo"; exit 0; fi
+          git commit -q -m "Siluetas: ${{ steps.gen.outputs.siluetas }} listas, faltan ${{ steps.gen.outputs.pendientes }}"
+          for i in 1 2 3; do
+            git pull --rebase -q origin main && git push -q origin main && break
+            sleep 10
+          done
+
+      - name: Seguir si faltan
+        if: success() && steps.gen.outputs.pendientes != '0' && steps.gen.outputs.hechos != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run siluetas.yml --ref main -f minutos="${{ github.event.inputs.minutos || '320' }}"
