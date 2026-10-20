@@ -1,0 +1,39 @@
+name: Muestra de siluetas
+
+# Prueba rápida: arma muestras/ con foto original y silueta de los jugadores de tools/muestra.txt.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/muestra.txt', 'tools/muestra.py']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: muestra
+  cancel-in-progress: true
+
+jobs:
+  muestra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install "rembg[cpu]==2.0.66" pillow numpy
+      - uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-human-seg-v1
+      - run: python tools/muestra.py
+      - name: Guardar muestras
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add muestras
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Muestra de siluetas"
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin main && break; sleep 5; done
