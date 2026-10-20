@@ -9,7 +9,7 @@ from rembg import new_session
 
 nombres = [l.strip() for l in open('tools/muestra.txt', encoding='utf-8') if l.strip()]
 jug = {j['n']: j for j in json.load(open('tools/jugadores.json'))}
-session = new_session('u2net_human_seg')
+sessions = [new_session(x) for x in S.MODELOS]
 os.makedirs('muestras', exist_ok=True)
 res = []
 for n in nombres:
@@ -36,7 +36,7 @@ for n in nombres:
                 r['intentos'].append(f'{w} -> {type(e).__name__}: {e}')
     if raw is None:
         res.append(r); continue
-    png = S.silueta(raw, session)
+    png = S.silueta(raw, sessions)
     r['silueta'] = bool(png)
     orig = Image.open(io.BytesIO(raw)).convert('RGB')
     H = 320

@@ -1305,7 +1305,8 @@ function findWiki(id){
       } catch(e){ return null; }
       const pages = ((j && j.query && j.query.pages) || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0));
       const hit = pages.find(pg => pg.thumbnail && pg.thumbnail.source
-        && /futbol|football|soccer|goalkeeper|arquero|portero/i.test(strip(pg.description || ''))
+        && /footballer|football player|futbolista|soccer player|goalkeeper|arquero|portero|football manager|entrenador/i.test(strip(pg.description || ''))
+        && !/stadium|estadio|club|season|temporada|team|equipo|film|pelicula|song|cancion|award|premio|cup|copa/i.test(strip(pg.description || ''))
         && (!words.length || words.some(w => strip(pg.title || '').toLowerCase().includes(w)))
         && yearOk(pg.description, p.by));
       if (hit){ photos[k] = hit.thumbnail.source; savePhotos(); return photos[k]; }

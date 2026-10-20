@@ -15,6 +15,10 @@ import argparse, io, json, os, re, sys, time, unicodedata, urllib.parse, urllib.
 UA = 'SubastaFutbolera/1.0 (https://github.com/diegovacapaz/subasta-futbolera; juego entre amigos)'
 TM = 'https://img.a.transfermarkt.technology/portrait/'
 ALTO = 320
+# Modelos de recorte, en orden: si el primero deja fondo pegado, se prueba el segundo.
+MODELOS = ('isnet-general-use', 'u2net_human_seg')
+# Estados de esta versión del recorte. Los de versiones anteriores se vuelven a procesar.
+OK, SIN, FALLO = 'ok2', 'sin-foto2', 'fallo2'
 
 
 def get(url, timeout=25):
@@ -42,7 +46,9 @@ def wiki(name, by):
         for p in pages:
             src = (p.get('thumbnail') or {}).get('source')
             desc = strip(p.get('description') or '')
-            if not src or not re.search(r'futbol|football|soccer|goalkeeper|arquero|portero', desc, re.I):
+            if not src or not re.search(r'footballer|football player|futbolista|soccer player|goalkeeper|arquero|portero|football manager|entrenador', desc, re.I):
+                continue
+            if re.search(r'stadium|estadio|club|season|temporada|team|equipo|film|pelicula|song|cancion|award|premio|cup|copa', desc, re.I):
                 continue
             if words and not any(w in strip(p.get('title', '')).lower() for w in words):
                 continue
@@ -54,8 +60,8 @@ def wiki(name, by):
     return ''
 
 
-def silueta(raw, session):
-    """PNG de la silueta negra, o None si el recorte no parece una persona."""
+def silueta(raw, sessions):
+    """PNG de la silueta negra, o None si ningún modelo da un recorte que parezca una persona."""
     from PIL import Image
     import numpy as np
     from rembg import remove
@@ -63,10 +69,15 @@ def silueta(raw, session):
     if max(img.size) < 320:   # las fotos chicas recortan mejor un poco agrandadas
         k = 320 / max(img.size)
         img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
-    cut = remove(img, session=session, post_process_mask=True)
-    a = np.array(cut.getchannel('A'))
-    cover = (a > 128).mean()
-    if cover < 0.06 or cover > 0.93:
+    a = None
+    for session in sessions:
+        m = np.array(remove(img, session=session, post_process_mask=True).getchannel('A'))
+        fg = m > 128
+        # Señales de recorte malo: casi nada, casi todo, o el fondo de arriba pegado a la cabeza.
+        if 0.06 <= fg.mean() <= 0.9 and fg[0].mean() <= 0.8:
+            a = m
+            break
+    if a is None:
         return None
     ys, xs = np.where(a > 40)
     a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
@@ -91,7 +102,7 @@ def main():
     args = ap.parse_args()
 
     from rembg import new_session
-    session = new_session('u2net_human_seg')
+    sessions = [new_session(m) for m in MODELOS]
     os.makedirs(args.salida, exist_ok=True)
     pe, pf = os.path.join(args.salida, 'estado.json'), os.path.join(args.salida, 'fotos.json')
     estado = json.load(open(pe)) if os.path.exists(pe) else {}
@@ -104,15 +115,16 @@ def main():
 
     fin = time.time() + args.minutos * 60
     hechos = cuenta = 0
-    stats = {'ok': 0, 'sin-foto': 0, 'fallo': 0, 'red': 0}
+    stats = {OK: 0, SIN: 0, FALLO: 0, 'red': 0}
     for j in jug:
         k = j['k']
         prev = estado.get(k)
-        if prev == 'ok' or (prev in ('sin-foto', 'fallo') and not args.reintentar):
+        if prev == OK or (prev in (SIN, FALLO) and not args.reintentar):
             continue
         if time.time() > fin or (args.limite and cuenta >= args.limite):
             break
         cuenta += 1
+        fotos.pop(k, None)
         fuentes = [TM + 'big/' + j['img'], TM + 'header/' + j['img']] if j['img'] else []
         png, red = None, False
         for u in fuentes:
@@ -120,7 +132,7 @@ def main():
                 raw = get(u)
             except Exception:
                 continue
-            png = silueta(raw, session)
+            png = silueta(raw, sessions)
             break
         if png is None:
             w = wiki(j['n'], j['by'])
@@ -130,18 +142,22 @@ def main():
                 if not j['img']:
                     fotos[k] = w   # para mostrar al revelar a quien no tiene foto de Transfermarkt
                 try:
-                    png = silueta(get(w), session)
+                    png = silueta(get(w), sessions)
                 except Exception:
                     red = True
             time.sleep(0.3)
         if png:
             open(os.path.join(args.salida, k + '.png'), 'wb').write(png)
-            estado[k] = 'ok'
+            estado[k] = OK
         elif red:
             stats['red'] += 1      # sin estado: se reintenta en la próxima corrida
             continue
         else:
-            estado[k] = 'sin-foto' if not fuentes and k not in fotos else 'fallo'
+            estado[k] = SIN if not fuentes and k not in fotos else FALLO
+            try:
+                os.remove(os.path.join(args.salida, k + '.png'))   # por si había una de una versión anterior
+            except OSError:
+                pass
         stats[estado[k]] += 1
         hechos += 1
         if hechos % 100 == 0:
@@ -149,8 +165,8 @@ def main():
             print(f'{hechos} procesados · {stats}', flush=True)
         time.sleep(0.15)
     guardar()
-    pendientes = sum(1 for j in jug if estado.get(j['k']) is None)
-    total_ok = sum(1 for v in estado.values() if v == 'ok')
+    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, SIN, FALLO))
+    total_ok = sum(1 for v in estado.values() if v == OK)
     print(f'Listo: {hechos} procesados en esta corrida {stats}. Siluetas: {total_ok}. Pendientes: {pendientes}.')
     if args.resumen:
         json.dump({'pendientes': pendientes, 'siluetas': total_ok, 'hechos': hechos}, open(args.resumen, 'w'))
