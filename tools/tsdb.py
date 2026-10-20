@@ -1,33 +1,35 @@
 #!/usr/bin/env python3
-"""Baja los recortes de TheSportsDB (fotos sin fondo) y los guarda en el repositorio.
+"""Baja los recortes de TheSportsDB (fotos sin fondo) y los lleva a medio cuerpo.
 
 Para cada jugador de tools/jugadores.json lo busca en la API de TheSportsDB y, si tiene recorte:
-  tsdb/c/<clave>.png   silueta negra de cuerpo entero (400 px de alto)
-  tsdb/b/<clave>.png   silueta negra de busto (320 px de alto)
-  tsdb/f/<clave>.webp  foto a color sin fondo, para revelar (480 px de alto)
-tsdb/indice.json dice qué archivos hay de cada jugador ("c", "b", "f").
+  tsdb/f/<clave>.webp  foto a color sin fondo, para revelar (cortada a la cintura si viene más larga)
+  tsdb/m/<clave>.png   silueta de medio cuerpo, si el recorte llega al menos al pecho
+  tsdb/b/<clave>.png   silueta de lo que haya (solo cara, por ejemplo), como último recurso
+tsdb/indice.json dice qué archivos hay de cada jugador ("f", "m", "b").
 Es incremental (tsdb/estado.json) y respeta el límite de la clave gratuita (30 consultas por minuto).
 """
 import argparse, io, json, os, sys, time, urllib.error, urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from siluetas import get, strip, encuadre   # noqa: E402
+from siluetas import get, strip   # noqa: E402
+import medio                      # noqa: E402
 
 API = 'https://www.thesportsdb.com/api/v1/json/{key}/searchplayers.php?p={q}'
-PAUSA = 2.2          # segundos entre consultas: menos de 30 por minuto
-OK, NO = 't1', 'no1'  # estados de esta versión
+PAUSA = 2.2                       # segundos entre consultas: menos de 30 por minuto
+OK, NO = 't2', 'no1'              # estados finales ('no1' de la versión anterior sigue valiendo)
+VIEJO = 't1'                      # bajados con la versión anterior: se migran sin volver a consultar la API
 
 
 def consultar(q, key):
     url = API.format(key=urllib.parse.quote(key), q=urllib.parse.quote(q.replace(' ', '_')))
-    for intento in range(3):
+    for _ in range(3):
         try:
             data = json.loads(get(url))
             time.sleep(PAUSA)
             return data
         except urllib.error.HTTPError as e:
             if e.code == 429:
-                time.sleep(65)   # se pasó del límite: esperar un minuto
+                time.sleep(65)
                 continue
             time.sleep(PAUSA)
             return None
@@ -55,47 +57,40 @@ def buscar(j, key):
                 if abs(int(nacio) - j['by']) > 1:
                     continue
             elif strip(p.get('strPlayer', '')).lower() != strip(j['n']).lower():
-                continue   # sin fecha, solo si el nombre coincide exacto
+                continue
             return p
     return None if red else {}
 
 
-def abrir_recorte(url):
+def abrir(raw):
     from PIL import Image
     try:
-        im = Image.open(io.BytesIO(get(url, timeout=40))).convert('RGBA')
+        im = Image.open(io.BytesIO(raw)).convert('RGBA')
     except Exception:
         return None
-    a = im.getchannel('A')
-    lo, hi = a.getextrema()
-    if hi == 0 or lo > 200:      # sin transparencia: no es un recorte
+    lo, hi = im.getchannel('A').getextrema()
+    if hi == 0 or lo > 200:          # sin transparencia: no es un recorte
         return None
-    return im.crop(a.point(lambda v: 255 if v > 40 else 0).getbbox())
+    return im
 
 
-def silueta_png(alpha, alto):
-    from PIL import Image
-    w, h = alpha.size
-    alpha = alpha.resize((max(1, round(w * alto / h)), alto), Image.LANCZOS)
-    alpha = alpha.point(lambda v: 0 if v < 24 else 255 if v > 232 else v // 16 * 16)
-    out = Image.new('LA', alpha.size, 0)
-    out.putalpha(alpha)
-    buf = io.BytesIO()
-    out.save(buf, 'PNG', optimize=True)
-    return buf.getvalue()
-
-
-def busto_de(im):
-    """Silueta de busto a partir de un recorte de cuerpo entero, encuadrando por la cara."""
-    from PIL import Image
-    fondo = Image.new('RGB', im.size, (255, 255, 255))
-    fondo.paste(im, mask=im.getchannel('A'))
-    _, cara, grupal, caja = encuadre(fondo)
-    if not cara or grupal:
-        return None
-    a = im.getchannel('A').crop(caja)
-    bb = a.point(lambda v: 255 if v > 40 else 0).getbbox()
-    return silueta_png(a.crop(bb), 320) if bb else None
+def procesar(im, salida, k):
+    """Guarda f, m y b a partir de un recorte. Devuelve las letras guardadas."""
+    tiene = ''
+    m, _ = medio.de_recorte(im)
+    if m is not None:
+        open(os.path.join(salida, 'm', k + '.png'), 'wb').write(medio.sil_png(m.getchannel('A')))
+        open(os.path.join(salida, 'f', k + '.webp'), 'wb').write(medio.color_webp(m))
+        tiene += 'fm'
+    else:
+        open(os.path.join(salida, 'f', k + '.webp'), 'wb').write(medio.color_webp(im))
+        b = medio.sil_png(im.getchannel('A'))
+        if b:
+            open(os.path.join(salida, 'b', k + '.png'), 'wb').write(b)
+            tiene += 'fb'
+        else:
+            tiene += 'f'
+    return tiene
 
 
 def main():
@@ -104,32 +99,47 @@ def main():
     ap.add_argument('--salida', default='tsdb')
     ap.add_argument('--minutos', type=float, default=320)
     ap.add_argument('--limite', type=int, default=0)
-    ap.add_argument('--solo', default='', help='nombres separados por | (para pruebas)')
     ap.add_argument('--resumen', default='')
     args = ap.parse_args()
     key = os.environ.get('TSDB_KEY') or '123'
 
-    for d in ('c', 'b', 'f'):
+    for d in ('m', 'b', 'f'):
         os.makedirs(os.path.join(args.salida, d), exist_ok=True)
     pe, pi = os.path.join(args.salida, 'estado.json'), os.path.join(args.salida, 'indice.json')
     estado = json.load(open(pe)) if os.path.exists(pe) else {}
     indice = json.load(open(pi)) if os.path.exists(pi) else {}
     jug = json.load(open(args.lista))
-    if args.solo:
-        nombres = set(args.solo.split('|'))
-        jug = [j for j in jug if j['n'] in nombres]
 
     def guardar():
         json.dump(estado, open(pe, 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(indice, open(pi, 'w'), separators=(',', ':'), sort_keys=True)
 
+    # Migración: los recortes de la versión anterior se llevan a medio cuerpo con la foto ya guardada.
     from PIL import Image
+    for k, v in list(estado.items()):
+        if v != VIEJO:
+            continue
+        fp = os.path.join(args.salida, 'f', k + '.webp')
+        im = Image.open(fp).convert('RGBA') if os.path.exists(fp) else None
+        for d in ('b', 'c'):
+            try:
+                os.remove(os.path.join(args.salida, d, k + '.png'))
+            except OSError:
+                pass
+        if im is None:
+            estado.pop(k)            # sin foto guardada: se vuelve a consultar
+            indice.pop(k, None)
+            continue
+        indice[k] = procesar(im, args.salida, k)
+        estado[k] = OK
+    guardar()
+
     fin = time.time() + args.minutos * 60
     hechos = cuenta = 0
-    stats = {'con recorte': 0, 'sin recorte': 0, 'no está': 0, 'red': 0}
+    stats = {'medio cuerpo': 0, 'solo cara': 0, 'sin recorte': 0, 'red': 0}
     for j in jug:
         k = j['k']
-        if estado.get(k) in (OK, NO) and not args.solo:
+        if estado.get(k) in (OK, NO):
             continue
         if time.time() > fin or (args.limite and cuenta >= args.limite):
             break
@@ -140,36 +150,35 @@ def main():
             continue
         tiene = ''
         if p:
-            render = abrir_recorte(p['strRender']) if p.get('strRender') else None
-            corte = abrir_recorte(p['strCutout']) if p.get('strCutout') else None
-            cuerpo = render or corte
-            if render:
-                open(os.path.join(args.salida, 'c', k + '.png'), 'wb').write(silueta_png(render.getchannel('A'), 400))
-                tiene += 'c'
-            busto = silueta_png(corte.getchannel('A'), 320) if corte else (busto_de(render) if render else None)
-            if busto:
-                open(os.path.join(args.salida, 'b', k + '.png'), 'wb').write(busto)
-                tiene += 'b'
-            if cuerpo:
-                col = cuerpo.resize((max(1, round(cuerpo.width * 480 / cuerpo.height)), 480), Image.LANCZOS)
-                col.save(os.path.join(args.salida, 'f', k + '.webp'), 'WEBP', quality=80, method=6)
-                tiene += 'f'
+            for campo in ('strCutout', 'strRender'):
+                if not p.get(campo):
+                    continue
+                try:
+                    im = abrir(get(p[campo], timeout=40))
+                except Exception:
+                    im = None
+                if im is not None:
+                    tiene = procesar(im, args.salida, k)
+                    if 'm' in tiene:
+                        break
         if tiene:
             indice[k] = tiene
-            stats['con recorte'] += 1
+            stats['medio cuerpo' if 'm' in tiene else 'solo cara'] += 1
+            estado[k] = OK
         else:
             indice.pop(k, None)
-            stats['sin recorte' if p else 'no está'] += 1
-        estado[k] = OK if tiene else NO
+            stats['sin recorte'] += 1
+            estado[k] = NO
         hechos += 1
         if hechos % 50 == 0:
             guardar()
             print(f'{hechos} procesados · {stats}', flush=True)
     guardar()
-    pendientes = sum(1 for j in json.load(open(args.lista)) if estado.get(j['k']) not in (OK, NO))
-    print(f'Listo: {hechos} en esta corrida {stats}. Con recorte en total: {len(indice)}. Pendientes: {pendientes}.')
+    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, NO))
+    con_m = sum(1 for v in indice.values() if 'm' in v)
+    print(f'Listo: {hechos} en esta corrida {stats}. Con medio cuerpo: {con_m}. Pendientes: {pendientes}.')
     if args.resumen:
-        json.dump({'pendientes': pendientes, 'recortes': len(indice), 'hechos': hechos}, open(args.resumen, 'w'))
+        json.dump({'pendientes': pendientes, 'recortes': con_m, 'hechos': hechos}, open(args.resumen, 'w'))
 
 
 if __name__ == '__main__':

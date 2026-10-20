@@ -12,7 +12,7 @@ on:
         default: '320'
   push:
     branches: [main]
-    paths: ['tools/tsdb.py']
+    paths: ['tools/tsdb.py', 'tools/medio.py']
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: tsdb
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   tsdb:

@@ -1,0 +1,62 @@
+name: Fotos de Commons
+
+# Completa con fotos de Wikimedia Commons (de la cintura para arriba, fondo simple) a los jugadores
+# que TheSportsDB no cubre con un medio cuerpo. Va detrás de la descarga de TheSportsDB:
+# corre cada hora, procesa a los que ya fueron revisados allí y guarda cada 25 minutos.
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: Minutos máximos de trabajo por corrida
+        default: '300'
+  push:
+    branches: [main]
+    paths: ['tools/commons.py', 'tools/medio.py']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commons
+  cancel-in-progress: false
+
+jobs:
+  commons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias
+        run: pip install "rembg[cpu]==2.0.66" "opencv-python-headless==4.10.0.84" pillow numpy
+      - name: Modelos de recorte en caché
+        uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-isnet-v1
+      - name: Buscar, recortar y guardar
+        env:
+          MINUTOS: ${{ github.event.inputs.minutos || '300' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          FIN=$(( $(date +%s) + MINUTOS * 60 ))
+          while :; do
+            RESTA=$(( (FIN - $(date +%s)) / 60 ))
+            [ "$RESTA" -lt 3 ] && break
+            git pull -q --rebase -X theirs origin main || true     # traer lo último que revisó TheSportsDB
+            T=$(( RESTA < 25 ? RESTA : 25 ))
+            python tools/commons.py --minutos "$T" --resumen /tmp/resumen.json
+            FOTOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['fotos'])")
+            HECHOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['hechos'])")
+            git add commons
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Fotos de Commons: $FOTOS jugadores con medio cuerpo"
+              for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
+            fi
+            [ "$HECHOS" = "0" ] && break    # no hay más jugadores listos: sigue en la próxima hora
+          done
