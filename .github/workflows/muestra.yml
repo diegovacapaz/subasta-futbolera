@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install "rembg[cpu]==2.0.66" pillow numpy
+      - run: pip install "rembg[cpu]==2.0.66" "opencv-python-headless==4.10.0.84" pillow numpy
       - uses: actions/cache@v4
         with:
           path: ~/.u2net

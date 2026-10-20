@@ -32,8 +32,9 @@ def strip(s):
 
 
 def wiki(name, by):
-    """Dirección de la foto de Wikipedia, '' si no hay, None si falló la red."""
+    """Fotos candidatas de Wikipedia (inglés y castellano), [] si no hay, None si falló la red."""
     words = [w for w in re.split(r"[\s'.-]+", strip(name).lower()) if len(w) >= 4]
+    found = []
     for lang, q in (('en', name + ' footballer'), ('es', name + ' futbolista')):
         url = f'https://{lang}.wikipedia.org/w/api.php?' + urllib.parse.urlencode({
             'action': 'query', 'format': 'json', 'formatversion': 2, 'generator': 'search', 'gsrlimit': 4,
@@ -55,9 +56,31 @@ def wiki(name, by):
             m = re.search(r'\b(18|19|20)\d{2}\b', desc)
             if m and by and abs(int(m.group(0)) - by) > 1:
                 continue
-            return src
+            if src not in found:
+                found.append(src)
+            break
         time.sleep(0.2)
-    return ''
+    return found
+
+
+def encuadre(img):
+    """Recorta un busto alrededor de la cara más grande (sirve para fotos de cuerpo entero).
+    Devuelve la imagen recortada, el centro de la cara (o None si no encontró caras) y si parece foto grupal."""
+    import cv2
+    import numpy as np
+    g = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
+    det = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    lado = max(24, min(img.size) // 12)
+    caras = det.detectMultiScale(g, scaleFactor=1.1, minNeighbors=5, minSize=(lado, lado))
+    if len(caras) == 0:
+        return img, None, False
+    caras = sorted(caras, key=lambda f: -f[2] * f[3])
+    grupal = len(caras) > 1 and caras[1][2] * caras[1][3] >= 0.35 * caras[0][2] * caras[0][3]
+    x, y, w, h = caras[0]
+    cx = x + w / 2
+    caja = (max(0, cx - 1.7 * w), max(0, y - 0.9 * h), min(img.width, cx + 1.7 * w), min(img.height, y + 3.2 * h))
+    caja = tuple(int(round(v)) for v in caja)
+    return img.crop(caja), (cx - caja[0], y + h / 2 - caja[1]), grupal
 
 
 def silueta(raw, sessions):
@@ -69,6 +92,14 @@ def silueta(raw, sessions):
     if max(img.size) < 320:   # las fotos chicas recortan mejor un poco agrandadas
         k = 320 / max(img.size)
         img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
+    img, cara, grupal = encuadre(img)
+    if grupal:
+        return None   # en una foto con varios, la silueta mezcla personas
+    if max(img.size) < 320:
+        k = 320 / max(img.size)
+        img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
+        if cara:
+            cara = (cara[0] * k, cara[1] * k)
     a = None
     for session in sessions:
         m = np.array(remove(img, session=session, post_process_mask=True).getchannel('A'))
@@ -79,6 +110,16 @@ def silueta(raw, sessions):
             break
     if a is None:
         return None
+    # Quedarse solo con la mancha de la persona (la que tiene la cara, o la más grande): limpia vecinos y puntitos.
+    import cv2
+    n, lab = cv2.connectedComponents((a > 128).astype('uint8'))
+    if n > 2:
+        if cara and lab[int(min(cara[1], a.shape[0] - 1)), int(min(cara[0], a.shape[1] - 1))] > 0:
+            keep = lab[int(min(cara[1], a.shape[0] - 1)), int(min(cara[0], a.shape[1] - 1))]
+        else:
+            keep = 1 + int(np.argmax(np.bincount(lab.ravel())[1:]))
+        mask = cv2.dilate((lab == keep).astype('uint8'), np.ones((5, 5), 'uint8'))
+        a = (a * mask).astype('uint8')
     ys, xs = np.where(a > 40)
     a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     h, w = a.shape
@@ -135,16 +176,24 @@ def main():
             png = silueta(raw, sessions)
             break
         if png is None:
-            w = wiki(j['n'], j['by'])
-            if w is None:
+            ws = wiki(j['n'], j['by'])
+            if ws is None:
                 red = True
-            elif w:
-                if not j['img']:
-                    fotos[k] = w   # para mostrar al revelar a quien no tiene foto de Transfermarkt
-                try:
-                    png = silueta(get(w), sessions)
-                except Exception:
-                    red = True
+            else:
+                for w in ws:
+                    try:
+                        png = silueta(get(w), sessions)
+                    except Exception:
+                        red = True
+                        continue
+                    if png:
+                        if not j['img']:
+                            fotos[k] = w   # para mostrar al revelar a quien no tiene foto de Transfermarkt
+                        break
+                if not png and ws and not j['img']:
+                    fotos[k] = ws[0]       # sin silueta, pero sirve para revelar
+                if png:
+                    red = False
             time.sleep(0.3)
         if png:
             open(os.path.join(args.salida, k + '.png'), 'wb').write(png)

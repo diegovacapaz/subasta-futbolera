@@ -27,13 +27,14 @@ for n in nombres:
         except Exception as e:
             r['intentos'].append(f'{u} -> {type(e).__name__}: {e}')
     if raw is None:
-        w = S.wiki(j['n'], j['by'])
-        r['wikipedia'] = w
-        if w:
+        ws = S.wiki(j['n'], j['by']) or []
+        r['wikipedia'] = ws
+        for w in ws:
             try:
                 raw = S.get(w); r['fuente'] = w
             except Exception as e:
-                r['intentos'].append(f'{w} -> {type(e).__name__}: {e}')
+                r['intentos'].append(f'{w} -> {type(e).__name__}: {e}'); continue
+            if S.silueta(raw, sessions): break
     if raw is None:
         res.append(r); continue
     png = S.silueta(raw, sessions)
