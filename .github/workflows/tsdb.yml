@@ -38,6 +38,7 @@ jobs:
         env:
           MINUTOS: ${{ github.event.inputs.minutos || '320' }}
           TSDB_KEY: ${{ secrets.TSDB_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -54,6 +55,7 @@ jobs:
             if ! git diff --cached --quiet; then
               git commit -q -m "Recortes TheSportsDB: $REC jugadores con recorte, faltan revisar $PEND"
               for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
+              gh workflow run commons.yml --ref main || true    # que Commons complete a los recién revisados
             fi
             echo "pendientes=$PEND" >> "$GITHUB_OUTPUT"
             echo "hechos=$HECHOS" >> "$GITHUB_OUTPUT"
