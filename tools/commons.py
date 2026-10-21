@@ -8,7 +8,8 @@ Para cada jugador (en orden de valor) que ya fue revisado en TheSportsDB y no ti
      (pocos bordes alrededor). Para las leyendas prefiere fotos de los años en que jugaban.
   3. Recorta la mejor de la cintura para arriba, le quita el fondo y controla que la silueta sea prolija.
 Guarda commons/m/<clave>.png (silueta), commons/f/<clave>.webp (foto a color sin fondo, para revelar) y
-en commons/indice.json la página de la foto en Commons (autoría y licencia).
+en commons/indice.json la página de la foto en Commons (autoría y licencia). Lo lanza la descarga de TheSportsDB
+cada vez que guarda, y también corre cada hora.
 """
 import argparse, io, json, os, re, sys, time, urllib.parse
 
