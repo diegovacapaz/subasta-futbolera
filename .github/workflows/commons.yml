@@ -13,7 +13,7 @@ on:
         default: '300'
   push:
     branches: [main]
-    paths: ['tools/commons.py', 'tools/medio.py']
+    paths: ['tools/commons.py', 'tools/medio.py', 'tools/revision.json']
 
 permissions:
   contents: write

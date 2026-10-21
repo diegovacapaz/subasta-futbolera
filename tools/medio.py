@@ -1,30 +1,46 @@
 """Herramientas para llevar cualquier foto a una silueta de medio cuerpo (de la cintura para arriba)."""
-import io
+import io, os
 
 ALTO = 320          # alto de las siluetas de medio cuerpo
 MIN_L = 1.9         # la foto tiene que llegar, como mínimo, al pecho (en "alturas de cara" debajo del centro de la cara)
 MAX_L = 4.0         # y se corta a la altura de la cintura
 
 
+YUNET = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'yunet.onnx')   # detector de caras (OpenCV Zoo, MIT)
+
+
 def caras(rgb):
-    """Caras detectadas, de la más grande a la más chica: [(x, y, w, h), ...]."""
+    """Caras detectadas (también de perfil o chicas), de la más grande a la más chica: [(x, y, w, h), ...]."""
     import cv2
     import numpy as np
-    g = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
-    det = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    lado = max(24, min(rgb.size) // 16)
-    f = det.detectMultiScale(g, scaleFactor=1.1, minNeighbors=5, minSize=(lado, lado))
-    return sorted([tuple(int(v) for v in c) for c in f], key=lambda c: -c[2] * c[3])
+    img = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+    h, w = img.shape[:2]
+    if os.path.exists(YUNET):
+        det = cv2.FaceDetectorYN.create(YUNET, '', (w, h), 0.75, 0.3, 5000)
+        det.setInputSize((w, h))
+        _, f = det.detect(img)
+        f = [] if f is None else [(int(c[0]), int(c[1]), int(c[2]), int(c[3])) for c in f]
+    else:
+        g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        det = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        lado = max(24, min(rgb.size) // 16)
+        f = [tuple(int(v) for v in c) for c in det.detectMultiScale(g, scaleFactor=1.1, minNeighbors=5, minSize=(lado, lado))]
+    return sorted([c for c in f if c[2] > 0 and c[3] > 0], key=lambda c: -c[2] * c[3])
 
 
 def una_cara(rgb):
-    """La cara principal, o None si no hay o si es una foto grupal."""
+    """La cara principal, o None si no hay o si hay otra persona dentro del encuadre de medio cuerpo."""
     cs = caras(rgb)
     if not cs:
         return None
-    if len(cs) > 1 and cs[1][2] * cs[1][3] >= 0.35 * cs[0][2] * cs[0][3]:
-        return None
-    return cs[0]
+    p = cs[0]
+    bx = caja(p, rgb.width, rgb.height)
+    for c in cs[1:]:
+        cx, cy = c[0] + c[2] / 2, c[1] + c[3] / 2
+        dentro = bx[0] <= cx <= bx[2] and bx[1] <= cy <= bx[3]
+        if (dentro and c[2] * c[3] >= 0.06 * p[2] * p[3]) or c[2] * c[3] >= 0.35 * p[2] * p[3]:
+            return None     # otra persona en el encuadre (o una foto grupal)
+    return p
 
 
 def caja(cara, ancho, alto):

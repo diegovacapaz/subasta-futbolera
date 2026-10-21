@@ -447,20 +447,23 @@ function silKey(id){ if (id < 0) return ''; const d = D[id]; return d[7] ? 'tm' 
 //   tsdb/m (recorte de TheSportsDB) → commons/m (foto de Wikimedia Commons) → tsdb/b o sil/ (busto) → genérica.
 let TSDB = {}, COM = {};
 const tsdbHas = (id, x) => !!(silKey(id) && (TSDB[silKey(id)] || '').includes(x));
-const comHas = id => !!(silKey(id) && COM[silKey(id)]);
+// En commons/indice.json, un '!' adelante quiere decir que la foto de TheSportsDB se marcó como mala en la revisión.
+const comVal = id => (silKey(id) && COM[silKey(id)]) || '';
+const comHas = id => comVal(id).replace(/^!/, '') !== '';
+const tsdbOk = (id, x) => tsdbHas(id, x) && comVal(id)[0] !== '!';
 function silUrl(id){
   const k = silKey(id); if (!k) return '';
-  if (tsdbHas(id, 'm')) return ASSET + 'tsdb/m/' + k + '.png';
+  if (tsdbOk(id, 'm')) return ASSET + 'tsdb/m/' + k + '.png';
   if (comHas(id)) return ASSET + 'commons/m/' + k + '.png';
-  if (tsdbHas(id, 'b')) return ASSET + 'tsdb/b/' + k + '.png';
+  if (tsdbOk(id, 'b')) return ASSET + 'tsdb/b/' + k + '.png';
   return ASSET + 'sil/' + k + '.png';
 }
 // Foto a color sin fondo para revelar, con el mismo encuadre que la silueta.
 function cutUrl(id){
   const k = silKey(id); if (!k) return '';
-  if (tsdbHas(id, 'm')) return ASSET + 'tsdb/f/' + k + '.webp';
+  if (tsdbOk(id, 'm')) return ASSET + 'tsdb/f/' + k + '.webp';
   if (comHas(id)) return ASSET + 'commons/f/' + k + '.webp';
-  if (tsdbHas(id, 'f')) return ASSET + 'tsdb/f/' + k + '.webp';
+  if (tsdbOk(id, 'f')) return ASSET + 'tsdb/f/' + k + '.webp';
   return '';
 }
 const bigTM = u => u.replace('/portrait/header/', '/portrait/big/');

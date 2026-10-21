@@ -17,11 +17,17 @@ from siluetas import get, strip   # noqa: E402
 import medio                      # noqa: E402
 
 API = 'https://commons.wikimedia.org/w/api.php?'
-OK, NO = 'c2', 'nc2'   # versión 2: fotos de la categoría del jugador en Commons (vía Wikidata)
+OK, NO = 'c3', 'nc3'   # versión 2: fotos de la categoría del jugador en Commons (vía Wikidata)
 MAX_CAND = 12
 
 
 WD = 'https://www.wikidata.org/w/api.php?'
+# Archivos que no son una foto del jugador solo: objetos, homenajes, lugares, o varias personas en el título.
+RUIDO = re.compile(r'logo|signature|firma|autograph|stadium|estadio|tomb|grave|statue|estatua|busto|bust\b|bronze|bronce|monument|'
+                   r'memorial|homenaje|tribute|award|premio|trofeo|trophy|placa|plaque|mural|card|cromo|figurita|sticker|stamp|'
+                   r'sello|poster|cartel|coin|moneda|street|calle|museum|museo|painting|pintura|drawing|dibujo|caricatur', re.I)
+VARIOS = re.compile(r' vs\.? | v\. | versus | contra | and | with | con | y | e | und | et | & |team|equipo|squad|plantel|seleccion|'
+                    r'selecao|national team|line-?up|formacion|celebrat|festej', re.I)
 FUTBOL = re.compile(r'football|soccer|futbol|calcio|fussball|voetbal|goalkeeper|arquero|portero', re.I)
 
 
@@ -86,14 +92,17 @@ def candidatas(j):
             sumar(archivos(titles='File:' + ficha['img']))
         if ficha.get('cat'):
             cat = 'Category:' + ficha['cat']
-            sumar(archivos(generator='categorymembers', gcmtitle=cat, gcmtype='file', gcmlimit=60))
+            sumar([c for c in archivos(generator='categorymembers', gcmtitle=cat, gcmtype='file', gcmlimit=60)
+                   if toks[-1] in strip(c['title']).lower()])
             subs = jget(API, action='query', list='categorymembers', cmtitle=cat, cmtype='subcat', cmlimit=30)
-            subs = [x['title'] for x in (subs.get('query') or {}).get('categorymembers', [])]
+            subs = [x['title'] for x in (subs.get('query') or {}).get('categorymembers', [])
+                    if toks[-1] in strip(x['title']).lower() and not RUIDO.search(strip(x['title']))]
             def de_epoca(t):
                 m = re.search(r'(19[0-9]{2}|20[0-2][0-9])', t)
                 return 0 if (m and j['by'] and 17 <= int(m.group(1)) - j['by'] <= 37) else 1
             for sc in sorted(subs, key=de_epoca)[:4]:
-                sumar(archivos(generator='categorymembers', gcmtitle=sc, gcmtype='file', gcmlimit=30))
+                sumar([c for c in archivos(generator='categorymembers', gcmtitle=sc, gcmtype='file', gcmlimit=30)
+                       if toks[-1] in strip(c['title']).lower()])
         if not ficha and len(toks) >= 2:   # sin ficha: solo búsqueda con el nombre completo en el archivo
             for c in archivos(generator='search', gsrnamespace=6, gsrsearch=f'"{j["n"]}"', gsrlimit=25):
                 if all(t in strip(c['title']).lower() for t in toks):
@@ -103,7 +112,7 @@ def candidatas(j):
     out = []
     for c in cands:
         t = strip(c['title']).lower()
-        if re.search(r'logo|signature|firma|autograph|stadium|estadio|tomb|grave|statue|estatua|mural|card|cromo|sticker|stamp|sello|poster|cartel|coin|moneda', t):
+        if RUIDO.search(t) or VARIOS.search(' ' + t + ' '):
             continue
         anio = re.search(r'\b(19[0-9]{2}|20[0-2][0-9])\b', t)
         c['anio'] = int(anio.group(1)) if anio else None
@@ -181,14 +190,22 @@ def main():
     def leer(p):
         return json.load(open(p)) if os.path.exists(p) else {}
     t_estado, t_indice = leer(os.path.join(args.tsdb, 'estado.json')), leer(os.path.join(args.tsdb, 'indice.json'))
+    # Correcciones a mano (tools/revision.json, armado con revisar.html):
+    #   {"<clave>": {"no": ["tsdb", "File:..."], "url": "https://... (otra foto)"}}
+    rev = leer(os.path.join(os.path.dirname(args.lista), 'revision.json'))
+    prev = leer(os.path.join(args.salida, 'rev.json'))
+    firma = lambda k: json.dumps(rev.get(k), sort_keys=True) if k in rev else ''
     jug = json.load(open(args.lista))
     if args.solo:
         nombres = set(args.solo.split('|'))
         jug = [j for j in jug if j['n'] in nombres]
     else:   # solo los que TheSportsDB ya revisó y no tienen medio cuerpo
-        jug = [j for j in jug if t_estado.get(j['k']) in ('t2', 'no1') and 'm' not in t_indice.get(j['k'], '')]
+        veto = lambda k: 'tsdb' in (rev.get(k) or {}).get('no', [])
+        jug = [j for j in jug if (t_estado.get(j['k']) in ('t2', 'no1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
+               or j['k'] in rev]
 
     def guardar():
+        json.dump(prev, open(os.path.join(args.salida, 'rev.json'), 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(estado, open(pe, 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(indice, open(pi, 'w'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
 
@@ -197,12 +214,18 @@ def main():
     stats = {'con foto': 0, 'sin foto': 0, 'red': 0}
     for j in jug:
         k = j['k']
-        if estado.get(k) in (OK, NO) and not args.solo:
+        if estado.get(k) in (OK, NO) and prev.get(k, '') == firma(k) and not args.solo:
             continue
         if time.time() > fin or (args.limite and cuenta >= args.limite):
             break
         cuenta += 1
-        cs = candidatas(j)
+        r = rev.get(k) or {}
+        if r.get('url'):
+            cs = [{'title': r['url'], 'thumb': r['url'], 'anio': None, 'nombre_completo': True, 'manual': True}]
+        else:
+            cs = candidatas(j)
+            if cs is not None:
+                cs = [c for c in cs if c['title'] not in r.get('no', [])]
         if cs is None:
             stats['red'] += 1
             continue
@@ -217,8 +240,9 @@ def main():
         for (puntos, crop, centro), c in evaluadas[:3]:
             for s in sessions:
                 cut = remove(crop, session=s, post_process_mask=True)
-                a = medio.limpiar(cut.getchannel('A'), centro, bordes=True)
+                a = medio.limpiar(cut.getchannel('A'), centro, bordes=not c.get('manual'))
                 if a is not None:
+                    cut = cut.copy()
                     cut.putalpha(a)
                     listo = (cut, c)
                     break
@@ -228,11 +252,15 @@ def main():
             cut, c = listo
             open(os.path.join(args.salida, 'm', k + '.png'), 'wb').write(medio.sil_png(cut.getchannel('A')))
             open(os.path.join(args.salida, 'f', k + '.webp'), 'wb').write(medio.color_webp(cut))
-            indice[k] = 'https://commons.wikimedia.org/wiki/' + urllib.parse.quote(c['title'].replace(' ', '_'))
+            src = c['title'] if c.get('manual') else 'https://commons.wikimedia.org/wiki/' + urllib.parse.quote(c['title'].replace(' ', '_'))
+            # '!' adelante: esta foto va antes que la de TheSportsDB (porque la de TheSportsDB se marcó como mala)
+            indice[k] = ('!' if 'tsdb' in r.get('no', []) else '') + src
             estado[k] = OK
             stats['con foto'] += 1
         else:
             indice.pop(k, None)
+            if 'tsdb' in r.get('no', []):
+                indice[k] = '!'      # la de TheSportsDB se descarta aunque no haya otra
             estado[k] = NO
             for d, ext in (('m', '.png'), ('f', '.webp')):   # por si había una de la versión anterior
                 try:
@@ -240,12 +268,14 @@ def main():
                 except OSError:
                     pass
             stats['sin foto'] += 1
+        if k in rev:
+            prev[k] = firma(k)
         hechos += 1
         if hechos % 25 == 0:
             guardar()
             print(f'{hechos} procesados · {stats}', flush=True)
     guardar()
-    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, NO))
+    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, NO) or prev.get(j['k'], '') != firma(j['k']))
     print(f'Listo: {hechos} en esta corrida {stats}. Con foto de Commons: {len(indice)}. Pendientes (ya revisados en TheSportsDB): {pendientes}.')
     if args.resumen:
         json.dump({'pendientes': pendientes, 'fotos': len(indice), 'hechos': hechos}, open(args.resumen, 'w'))

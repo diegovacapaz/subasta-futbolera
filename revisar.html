@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisar fotos · Subasta Futbolera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<style>
+/* Mesa de revisión: grilla de fichas (foto a color + silueta), filtros arriba, barra de cambios abajo. */
+:root{
+  --bg:#EDF1EC; --surface:#FFFFFF; --surface-2:#F4F7F3; --ink:#15211B; --muted:#5A6A61; --line:#D2DBD4;
+  --accent:#A9620E; --accent-ink:#FFFFFF; --accent-soft:#F6E7CF; --stage:#EDE6CD; --sil:#17221C; --bad:#B3392F; --bad-soft:#F7DEDA;
+  --f-display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --f-body:"Barlow","Segoe UI",system-ui,sans-serif;
+  --f-num:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#0C1411; --surface:#14201B; --surface-2:#1A2822; --ink:#E6EEE8; --muted:#8EA096; --line:#273730;
+  --accent:#E8A23A; --accent-ink:#1B1205; --accent-soft:#3A2C14; --stage:#2A281F; --sil:#020504; --bad:#F07A6E; --bad-soft:#3B1E1B;
+  color-scheme:dark;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding:20px max(16px,env(safe-area-inset-right,0px)) 110px max(16px,env(safe-area-inset-left,0px))}
+#app{max-width:1280px;margin:0 auto}
+h1{font-family:var(--f-display);font-weight:900;font-size:clamp(34px,6vw,56px);text-transform:uppercase;line-height:.9;margin:0 0 8px}
+h1 span{color:var(--accent)}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 18px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:16px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-weight:600;font-size:14px}
+.chip span{font-family:var(--f-num);color:var(--muted);margin-left:4px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"] span{color:inherit;opacity:.7}
+.search{flex:1 1 220px;max-width:340px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;overflow:hidden;display:grid;min-width:0}
+.card.mal{border-color:var(--bad);background:var(--bad-soft)}
+.pics{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--stage);height:170px}
+.pics div{display:flex;align-items:flex-end;justify-content:center;overflow:hidden;min-width:0}
+.pics img{max-width:100%;max-height:100%;display:block}
+.pics .empty{color:var(--muted);font-size:12px;align-items:center;text-align:center;padding:8px}
+.info{padding:10px 12px;display:grid;gap:6px;min-width:0}
+.name{font-weight:700;font-size:16px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.meta a{color:var(--accent)}
+.row{display:flex;gap:6px}
+.mark{flex:none;border:1.5px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 10px;font-weight:700;font-size:13px}
+.mark[aria-pressed="true"]{border-color:var(--bad);color:var(--bad);background:var(--surface)}
+.url{font-size:13px;padding:6px 8px}
+.more{display:block;margin:18px auto 0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 18px;font-weight:600}
+.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:5;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.foot-in{max-width:1280px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.foot b{font-family:var(--f-num);font-size:18px}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 18px;font-weight:700}
+.primary:disabled{opacity:.4;cursor:not-allowed}
+.ghost{background:none;border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-weight:600}
+.note{font-size:13px;color:var(--muted);margin:0}
+textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;font-size:12px;margin-top:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+.status{color:var(--muted);padding:40px 0;text-align:center}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>Revisar <span>fotos</span></h1>
+  <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o quedaron feas. Si tenés otra foto mejor, pegá el link directo a la imagen. Al terminar tocá <b>Copiar cambios</b> y pasámelos por el chat: el proceso rehace esas fichas.</p>
+  <div class="bar">
+    <div class="chips" id="chips"></div>
+    <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
+  </div>
+  <div id="list"><p class="status">Cargando jugadores…</p></div>
+</div>
+<div class="foot"><div class="foot-in">
+  <p class="note"><b id="nc">0</b> cambios marcados. Quedan guardados en este navegador hasta que los copies.</p>
+  <div class="row"><button class="ghost" id="clear">Borrar marcas</button><button class="primary" id="copy">Copiar cambios</button></div>
+  <textarea id="out" hidden readonly aria-label="Cambios para copiar"></textarea>
+</div></div>
+<script>
+const KEY = 'subasta-revision';
+let J = [], TS = {}, CO = {}, REV = {}, filtro = 'todos', q = '', pagina = 1;
+let marcas = {}; try { marcas = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){}
+const guardar = () => { try { localStorage.setItem(KEY, JSON.stringify(marcas)); } catch(e){} contar(); };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const fetchJ = (u, def) => fetch(u, {cache:'no-cache'}).then(r => r.ok ? r.json() : def).catch(() => def);
+
+// Fuente actual de la ficha: TheSportsDB, Commons, o nada de medio cuerpo
+function fuente(j){
+  const c = CO[j.k] || '', veto = c[0] === '!', com = c.replace(/^!/, '');
+  if (!veto && (TS[j.k] || '').includes('m')) return {tipo:'tsdb', id:'tsdb', f:`tsdb/f/${j.k}.webp`, m:`tsdb/m/${j.k}.png`};
+  if (com){
+    const t = com.startsWith('https://commons.wikimedia.org/wiki/') ? decodeURIComponent(com.split('/wiki/')[1]).replace(/_/g, ' ') : com;
+    return {tipo:'commons', id:t, link:com, f:`commons/f/${j.k}.webp`, m:`commons/m/${j.k}.png`};
+  }
+  return {tipo:'nada', id:'', f:'', m:''};
+}
+const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
+function pasa(j, f){
+  if (filtro === 'marcadas') return !!marcas[j.k];
+  if (filtro === 'nada') return f.tipo === 'nada';
+  if (f.tipo === 'nada') return false;
+  if (filtro === 'ley') return j.ley;
+  if (filtro === 'tsdb' || filtro === 'commons') return f.tipo === filtro;
+  return true;
+}
+function lista(){
+  const nq = norm(q.trim());
+  return J.map(j => [j, fuente(j)]).filter(([j, f]) => pasa(j, f) && (!nq || norm(j.n).includes(nq)));
+}
+function chips(){
+  const n = {}; J.forEach(j => { const f = fuente(j);
+    FILTROS.forEach(([id]) => { const old = filtro; filtro = id; if (pasa(j, f)) n[id] = (n[id] || 0) + 1; filtro = old; }); });
+  document.getElementById('chips').innerHTML = FILTROS.map(([id, l]) =>
+    `<button class="chip" data-f="${id}" aria-pressed="${filtro === id}">${l}<span>${(n[id] || 0).toLocaleString('es-AR')}</span></button>`).join('');
+}
+function ficha(j, f){
+  const m = marcas[j.k] || {};
+  return `<article class="card ${m.mal ? 'mal' : ''}" data-k="${j.k}">
+    <div class="pics">${f.f ? `<div><img loading="lazy" src="${f.f}" alt="Foto de ${esc(j.n)}"></div><div><img loading="lazy" src="${f.m}" alt="Silueta"></div>`
+                            : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
+    <div class="info">
+      <div class="name" title="${esc(j.n)}">${esc(j.n)}</div>
+      <div class="meta"><span>${j.ley ? 'Leyenda' : 'Actual'} · ${j.by || '—'}</span><span>${f.tipo === 'tsdb' ? 'TheSportsDB' : f.tipo === 'commons' ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">Commons</a>` : 'Busto o genérica'}</span></div>
+      <div class="row">${f.tipo !== 'nada' ? `<button class="mark" data-a="mal" aria-pressed="${!!m.mal}">Está mal</button>` : ''}
+        <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}"></div>
+    </div></article>`;
+}
+function pintar(){
+  chips();
+  const L = lista(), N = pagina * 48;
+  document.getElementById('list').innerHTML = L.length
+    ? `<div class="grid">${L.slice(0, N).map(([j, f]) => ficha(j, f)).join('')}</div>${L.length > N ? `<button class="more" id="more">Mostrar más (${(L.length - N).toLocaleString('es-AR')} restantes)</button>` : ''}`
+    : `<p class="status">No hay jugadores con este filtro.</p>`;
+}
+function contar(){
+  const n = Object.keys(marcas).length;
+  document.getElementById('nc').textContent = n;
+  document.getElementById('copy').disabled = !n;
+}
+function cambios(){
+  const out = JSON.parse(JSON.stringify(REV));
+  for (const [k, m] of Object.entries(marcas)){
+    const j = J.find(x => x.k === k); if (!j) continue;
+    const f = fuente(j), r = out[k] || {no: []};
+    r.no = r.no || [];
+    if (m.mal && f.id && !r.no.includes(f.id)) r.no.push(f.id);
+    if (m.url) r.url = m.url;
+    out[k] = r;
+  }
+  return JSON.stringify(out, null, 1);
+}
+document.addEventListener('click', e => {
+  const c = e.target.closest('.chip');
+  if (c){ filtro = c.dataset.f; pagina = 1; pintar(); return; }
+  if (e.target.id === 'more'){ pagina++; pintar(); return; }
+  const b = e.target.closest('[data-a="mal"]');
+  if (b){
+    const k = b.closest('.card').dataset.k, m = marcas[k] || {};
+    m.mal = !m.mal; if (!m.mal && !m.url) delete marcas[k]; else marcas[k] = m;
+    b.setAttribute('aria-pressed', String(!!m.mal)); b.closest('.card').classList.toggle('mal', !!m.mal); guardar();
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q'){ q = e.target.value; pagina = 1; pintar(); return; }
+  if (e.target.dataset.a === 'url'){
+    const k = e.target.closest('.card').dataset.k, m = marcas[k] || {}, v = e.target.value.trim();
+    if (v) m.url = v; else delete m.url;
+    if (!m.mal && !m.url) delete marcas[k]; else marcas[k] = m;
+    guardar();
+  }
+});
+document.getElementById('copy').addEventListener('click', async () => {
+  const txt = cambios(), out = document.getElementById('out');
+  out.value = txt; out.hidden = false;
+  try { await navigator.clipboard.writeText(txt); document.getElementById('copy').textContent = 'Copiado'; setTimeout(() => document.getElementById('copy').textContent = 'Copiar cambios', 2000); }
+  catch(e){ out.focus(); out.select(); }
+});
+document.getElementById('clear').addEventListener('click', () => { marcas = {}; guardar(); pintar(); document.getElementById('out').hidden = true; });
+Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), fetchJ('commons/indice.json', {}), fetchJ('tools/revision.json', {})])
+  .then(([j, t, c, r]) => { J = j; TS = t; CO = c; REV = r; contar(); pintar(); });
+</script>
+</body>
+</html>
