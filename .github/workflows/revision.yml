@@ -1,0 +1,53 @@
+name: Marcas de la revisión
+
+# Lee cada 5 minutos las marcas que dejan los que revisan en revisar.html (formulario de Google → hoja publicada),
+# actualiza tools/revision.json y, si cambió, lanza la búsqueda de Commons para rehacer esas fichas.
+# Cada corrida dura unas 5 horas y al terminar se vuelve a lanzar; el horario es solo un respaldo por si la cadena se corta.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 */3 * * *'
+  push:
+    branches: [main]
+    paths: ['tools/sincronizar.py', '.github/workflows/revision.yml']
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: revision
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    steps:
+      - uses: actions/checkout@v4
+      - name: Leer marcas y aplicarlas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          FIN=$(( $(date +%s) + 300 * 60 ))
+          while [ "$(date +%s)" -lt "$FIN" ]; do
+            git pull -q --rebase -X theirs origin main || true
+            R=$(python3 tools/sincronizar.py || echo error)
+            echo "$(date -u +%H:%M) $R"
+            git add tools/revision.json
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Revisión: marcas de los revisores ($(echo "$R" | cut -d' ' -f2) jugadores)"
+              for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
+              # que Commons rehaga esas fichas (si ya está corriendo, las toma en su próxima vuelta)
+              ACTIVAS=$(gh run list --workflow commons.yml --limit 5 --json status -q '[.[] | select(.status != "completed")] | length' || echo 1)
+              [ "$ACTIVAS" = "0" ] && gh workflow run commons.yml --ref main -f minutos=60 || true
+            fi
+            sleep 300
+          done
+      - name: Seguir leyendo
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run revision.yml --ref main

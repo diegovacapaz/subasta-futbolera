@@ -65,28 +65,40 @@ input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid v
 .note{font-size:13px;color:var(--muted);margin:0}
 textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;font-size:12px;margin-top:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
 .status{color:var(--muted);padding:40px 0;text-align:center}
+.who{font-size:12px;font-weight:600;color:var(--bad)}
+.yo{flex:0 1 200px}
+.yo.falta{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+.aviso{font-size:13px;font-weight:600;color:var(--bad);margin:0}
 </style>
 </head>
 <body>
 <div id="app">
   <h1>Revisar <span>fotos</span></h1>
-  <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o no sirven (se busca otra foto) y con <b>Mal recortada</b> las que te gustan pero quedaron mal cortadas (se vuelven a recortar con un modelo más preciso). Si tenés otra foto mejor, pegá el link directo a la imagen. Al terminar tocá <b>Copiar cambios</b> y pasámelos por el chat: el proceso rehace esas fichas.</p>
+  <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o no sirven (se busca otra foto) y con <b>Mal recortada</b> las que te gustan pero quedaron mal cortadas (se vuelven a recortar con un modelo más preciso). Si tenés otra foto mejor, pegá el link directo a la imagen. Las marcas se comparten con todos los que revisan y el proceso las aplica solo, en un rato.</p>
   <div class="bar">
+    <input class="yo" id="yo" placeholder="Tu nombre" aria-label="Tu nombre" autocomplete="nickname" maxlength="40">
     <div class="chips" id="chips"></div>
     <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
   </div>
   <div id="list"><p class="status">Cargando jugadores…</p></div>
 </div>
 <div class="foot"><div class="foot-in">
-  <p class="note"><b id="nc">0</b> cambios marcados. Quedan guardados en este navegador hasta que los copies.</p>
-  <div class="row"><button class="ghost" id="clear">Borrar marcas</button><button class="primary" id="copy">Copiar cambios</button></div>
-  <textarea id="out" hidden readonly aria-label="Cambios para copiar"></textarea>
+  <p class="note" id="estado">Cargando marcas…</p>
+  <button class="ghost" id="sync">Actualizar</button>
 </div></div>
 <script>
-const KEY = 'subasta-revision';
-let J = [], TS = {}, CO = {}, REV = {}, filtro = 'todos', q = '', pagina = 1;
-let marcas = {}; try { marcas = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){}
-const guardar = () => { try { localStorage.setItem(KEY, JSON.stringify(marcas)); } catch(e){} contar(); };
+// Las marcas viajan a un formulario de Google (una fila por cambio) y se leen de su hoja publicada como CSV.
+// Cada fila guarda el estado completo de la ficha: {id de la foto juzgada, mal, recorte, url, t}. Gana la más nueva.
+const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSc_ze1VE8cRkpEAdbEj3dt8EwDw67UBFAJCHe3iCNI7FCQBZQ/formResponse';
+const ENTRY = {clave: 'entry.106100299', accion: 'entry.240074220', valor: 'entry.1169776155', revisor: 'entry.1246452984'};
+const CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8SOBIPVzFFUOIEp7LPiOu76u5JYCZ5XD8Gsn-CN_ps-TV7-ziAKmKbTv8CMYZgGrAmy4iMNN7sMqG/pub?gid=1439134911&single=true&output=csv';
+const KEY = 'subasta-revision-2', KEY_VIEJA = 'subasta-revision', KEY_YO = 'subasta-revisor';
+let J = [], TS = {}, CO = {}, filtro = 'todos', q = '', pagina = 1, listo = false;
+const leerLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch(e){ return d; } };
+const grabarLS = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch(e){} };
+let mias = leerLS(KEY, {});        // marcas hechas en este navegador: {clave: {id, mal, recorte, url, t, quien, enviada}}
+let todas = {};                    // última marca de cada ficha según la hoja compartida
+let yo = ''; try { yo = localStorage.getItem(KEY_YO) || ''; } catch(e){}
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fetchJ = (u, def) => fetch(u, {cache:'no-cache'}).then(r => r.ok ? r.json() : def).catch(() => def);
@@ -101,9 +113,17 @@ function fuente(j){
   }
   return {tipo:'nada', id:'', f:'', m:''};
 }
+// Marca vigente de una ficha: la más nueva entre la hoja y este navegador. Mal/recorte valen solo para la foto que se juzgó.
+function marca(j, f){
+  const a = todas[j.k], b = mias[j.k], m = !a ? b : !b ? a : (b.t > a.t ? b : a);
+  if (!m) return null;
+  const misma = (m.id || '') === f.id;
+  const r = {mal: misma && !!m.mal, recorte: misma && !!m.recorte, url: m.url || '', quien: m.quien || ''};
+  return r.mal || r.recorte || r.url ? r : null;
+}
 const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
 function pasa(j, f){
-  if (filtro === 'marcadas') return !!marcas[j.k];
+  if (filtro === 'marcadas') return !!marca(j, f);
   if (filtro === 'nada') return f.tipo === 'nada';
   if (f.tipo === 'nada') return false;
   if (filtro === 'ley') return j.ley;
@@ -120,8 +140,13 @@ function chips(){
   document.getElementById('chips').innerHTML = FILTROS.map(([id, l]) =>
     `<button class="chip" data-f="${id}" aria-pressed="${filtro === id}">${l}<span>${(n[id] || 0).toLocaleString('es-AR')}</span></button>`).join('');
 }
+function quienTxt(m){
+  if (!m || !m.quien) return '';
+  const que = m.mal ? 'Marcada mal' : m.recorte ? 'Mal recortada' : 'Link propuesto';
+  return `${que} por ${m.quien === yo ? 'vos' : esc(m.quien)}`;
+}
 function ficha(j, f){
-  const m = marcas[j.k] || {};
+  const m = marca(j, f) || {};
   return `<article class="card ${m.mal || m.recorte ? 'mal' : ''}" data-k="${j.k}">
     <div class="pics">${f.f ? `<div><img loading="lazy" src="${f.f}" alt="Foto de ${esc(j.n)}"></div><div><img loading="lazy" src="${f.m}" alt="Silueta"></div>`
                             : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
@@ -131,6 +156,7 @@ function ficha(j, f){
       ${f.tipo !== 'nada' ? `<div class="row"><button class="mark" data-a="mal" aria-pressed="${!!m.mal}" title="No es él, o la foto no sirve: se busca otra">Está mal</button>
         <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por una foto de Commons' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
       <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
+      <div class="who">${quienTxt(m)}</div>
     </div></article>`;
 }
 function pintar(){
@@ -140,60 +166,122 @@ function pintar(){
     ? `<div class="grid">${L.slice(0, N).map(([j, f]) => ficha(j, f)).join('')}</div>${L.length > N ? `<button class="more" id="more">Mostrar más (${(L.length - N).toLocaleString('es-AR')} restantes)</button>` : ''}`
     : `<p class="status">No hay jugadores con este filtro.</p>`;
 }
-function contar(){
-  const n = Object.keys(marcas).length;
-  document.getElementById('nc').textContent = n;
-  document.getElementById('copy').disabled = !n;
+function pie(txt){
+  const n = J.reduce((s, j) => s + (marca(j, fuente(j)) ? 1 : 0), 0);
+  const pend = Object.values(mias).filter(m => !m.enviada).length;
+  document.getElementById('estado').innerHTML = txt || `<b>${n.toLocaleString('es-AR')}</b> fichas marcadas entre todos.` +
+    (pend ? ` ${pend} tuyas por enviar.` : ' Se aplican solas en un rato.');
 }
-function cambios(){
-  const out = JSON.parse(JSON.stringify(REV));
-  for (const [k, m] of Object.entries(marcas)){
-    const j = J.find(x => x.k === k); if (!j) continue;
-    const f = fuente(j), r = out[k] || {no: []};
-    r.no = r.no || [];
-    if (m.mal && f.id && !r.no.includes(f.id)) r.no.push(f.id);
-    if (m.recorte && f.id){
-      if (f.tipo === 'tsdb'){ if (!r.no.includes('tsdb')) r.no.push('tsdb'); }      // el recorte de TheSportsDB no se puede rehacer: se reemplaza
-      else { r.recortar = r.recortar || []; if (!r.recortar.includes(f.id)) r.recortar.push(f.id); }
-    }
-    if (m.url) r.url = m.url;
-    out[k] = r;
+
+// --- Envío y lectura de la hoja compartida ---
+function enviar(k){
+  const m = mias[k]; if (!m || !yo) return;
+  const body = new URLSearchParams({[ENTRY.clave]: k, [ENTRY.accion]: 'marca', [ENTRY.revisor]: yo,
+    [ENTRY.valor]: JSON.stringify({id: m.id, mal: !!m.mal, recorte: !!m.recorte, url: m.url || '', t: m.t})});
+  fetch(FORM, {method: 'POST', mode: 'no-cors', body})
+    .then(() => { if (mias[k] && mias[k].t === m.t){ mias[k].enviada = Date.now(); grabarLS(KEY, mias); pie(); } })
+    .catch(() => pie('No se pudo enviar (¿sin conexión?). Se reintenta al tocar Actualizar.'));
+}
+function parseCSV(txt){
+  const filas = []; let fila = [], campo = '', comillas = false;
+  for (let i = 0; i < txt.length; i++){
+    const c = txt[i];
+    if (comillas){ if (c === '"'){ if (txt[i + 1] === '"'){ campo += '"'; i++; } else comillas = false; } else campo += c; }
+    else if (c === '"') comillas = true;
+    else if (c === ','){ fila.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r'){ if (c === '\r' && txt[i + 1] === '\n') i++; fila.push(campo); filas.push(fila); fila = []; campo = ''; }
+    else campo += c;
   }
-  return JSON.stringify(out, null, 1);
+  if (campo || fila.length){ fila.push(campo); filas.push(fila); }
+  return filas;
+}
+async function leerHoja(){
+  let txt;
+  try { const r = await fetch(CSV + '&_=' + Date.now(), {cache: 'no-store'}); if (!r.ok) throw 0; txt = await r.text(); }
+  catch(e){ pie('No se pudieron leer las marcas de los demás. Las tuyas igual se envían.'); return; }
+  const filas = parseCSV(txt), cab = filas.shift() || [], col = n => cab.indexOf(n);
+  const ck = col('clave'), ca = col('accion'), cv = col('valor'), cr = col('revisor'), nuevas = {};
+  for (const f of filas){
+    if (f[ca] !== 'marca' || !f[ck]) continue;
+    let v; try { v = JSON.parse(f[cv]); } catch(e){ continue; }
+    if (typeof v !== 'object' || !v || typeof v.t !== 'number') continue;
+    v.quien = (f[cr] || '').trim();
+    if (!nuevas[f[ck]] || v.t >= nuevas[f[ck]].t) nuevas[f[ck]] = v;
+  }
+  todas = nuevas;
+  // Las mías que ya figuran en la hoja se olvidan; las que no llegaron después de 15 minutos se vuelven a mandar
+  for (const [k, m] of Object.entries(mias)){
+    if (todas[k] && todas[k].t >= m.t) delete mias[k];
+    else if (!m.enviada || Date.now() - m.enviada > 15 * 60 * 1000) enviar(k);
+  }
+  grabarLS(KEY, mias);
+  const ae = document.activeElement;   // no repintar mientras alguien escribe un link
+  if (listo && !(ae && ae.classList && ae.classList.contains('url'))) pintar();
+  pie();
+}
+
+// --- Interacción ---
+const yoInput = document.getElementById('yo');
+yoInput.value = yo;
+yoInput.addEventListener('change', () => {
+  yo = yoInput.value.trim(); grabarLS(KEY_YO, yo); yoInput.classList.toggle('falta', !yo);
+  if (yo) Object.keys(mias).forEach(k => { if (!mias[k].enviada) enviar(k); });
+  pintar(); pie();
+});
+function pedirNombre(){
+  yoInput.classList.add('falta'); yoInput.focus(); yoInput.scrollIntoView({block: 'center', behavior: 'smooth'});
+  pie('<span class="aviso">Primero poné tu nombre arriba, así se sabe quién marcó cada ficha.</span>');
+}
+function cambiar(card, cambio){
+  const k = card.dataset.k, j = J.find(x => x.k === k), f = fuente(j), antes = marca(j, f) || {};
+  const m = {id: f.id, mal: !!antes.mal, recorte: !!antes.recorte, url: antes.url || '', ...cambio, t: Date.now(), quien: yo};
+  if (cambio.mal) m.recorte = false;
+  if (cambio.recorte) m.mal = false;
+  mias[k] = m; grabarLS(KEY, mias); enviar(k);
+  const nueva = marca(j, f) || {};
+  card.classList.toggle('mal', !!(nueva.mal || nueva.recorte));
+  card.querySelectorAll('.mark').forEach(b => b.setAttribute('aria-pressed', String(!!nueva[b.dataset.a])));
+  card.querySelector('.who').innerHTML = quienTxt(nueva);
+  pie();
 }
 document.addEventListener('click', e => {
   const c = e.target.closest('.chip');
   if (c){ filtro = c.dataset.f; pagina = 1; pintar(); return; }
   if (e.target.id === 'more'){ pagina++; pintar(); return; }
+  if (e.target.id === 'sync'){ leerHoja(); return; }
   const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
   if (b){
-    const card = b.closest('.card'), k = card.dataset.k, m = marcas[k] || {}, campo = b.dataset.a;
-    m[campo] = !m[campo];
-    if (m[campo]){ const otro = campo === 'mal' ? 'recorte' : 'mal'; m[otro] = false; const ob = card.querySelector(`[data-a="${otro}"]`); if (ob) ob.setAttribute('aria-pressed', 'false'); }
-    if (!m.mal && !m.recorte && !m.url) delete marcas[k]; else marcas[k] = m;
-    b.setAttribute('aria-pressed', String(!!m[campo])); card.classList.toggle('mal', !!(m.mal || m.recorte)); guardar();
+    if (!yo) return pedirNombre();
+    cambiar(b.closest('.card'), {[b.dataset.a]: b.getAttribute('aria-pressed') !== 'true'});
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'q'){ q = e.target.value; pagina = 1; pintar(); return; }
-  if (e.target.dataset.a === 'url'){
-    const k = e.target.closest('.card').dataset.k, m = marcas[k] || {}, v = e.target.value.trim();
-    if (v) m.url = v; else delete m.url;
-    if (!m.mal && !m.recorte && !m.url) delete marcas[k]; else marcas[k] = m;
-    guardar();
-  }
+  if (e.target.id === 'q'){ q = e.target.value; pagina = 1; pintar(); }
 });
-document.getElementById('copy').addEventListener('click', async () => {
-  const txt = cambios(), out = document.getElementById('out');
-  out.value = txt; out.hidden = false;
-  try { await navigator.clipboard.writeText(txt); document.getElementById('copy').textContent = 'Copiado'; setTimeout(() => document.getElementById('copy').textContent = 'Copiar cambios', 2000); }
-  catch(e){ out.focus(); out.select(); }
+document.addEventListener('change', e => {
+  if (e.target.dataset.a !== 'url') return;
+  if (!yo){ pedirNombre(); return; }
+  const v = e.target.value.trim();
+  if (v && !/^https?:\/\/\S+$/.test(v)){ pie('<span class="aviso">El link tiene que empezar con https://</span>'); return; }
+  cambiar(e.target.closest('.card'), {url: v});
 });
-document.getElementById('clear').addEventListener('click', () => { marcas = {}; guardar(); pintar(); document.getElementById('out').hidden = true; });
+
 const comIndice = () => Promise.all([0,1,2,3].map(n => fetchJ(`commons/indice-${n}.json`, null)))
   .then(p => p.some(Boolean) ? Object.assign({}, ...p.filter(Boolean)) : fetchJ('commons/indice.json', {}));
-Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), comIndice(), fetchJ('tools/revision.json', {})])
-  .then(([j, t, c, r]) => { J = j; TS = t; CO = c; REV = r; contar(); pintar(); });
+Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), comIndice()])
+  .then(([j, t, c]) => {
+    J = j; TS = t; CO = c; listo = true;
+    // Marcas de la versión anterior de esta página (guardadas solo en este navegador): se pasan a la hoja compartida
+    const viejas = leerLS(KEY_VIEJA, {});
+    for (const [k, m] of Object.entries(viejas)){
+      const jj = J.find(x => x.k === k); if (!jj || mias[k]) continue;
+      mias[k] = {id: fuente(jj).id, mal: !!m.mal, recorte: !!m.recorte, url: m.url || '', t: Date.now(), quien: yo};
+    }
+    try { localStorage.removeItem(KEY_VIEJA); } catch(e){}
+    grabarLS(KEY, mias);
+    pintar(); leerHoja();
+  });
+setInterval(() => { if (document.visibilityState === 'visible' && listo) leerHoja(); }, 120000);
 </script>
 </body>
 </html>
