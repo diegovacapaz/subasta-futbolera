@@ -190,7 +190,9 @@ document.getElementById('copy').addEventListener('click', async () => {
   catch(e){ out.focus(); out.select(); }
 });
 document.getElementById('clear').addEventListener('click', () => { marcas = {}; guardar(); pintar(); document.getElementById('out').hidden = true; });
-Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), fetchJ('commons/indice.json', {}), fetchJ('tools/revision.json', {})])
+const comIndice = () => Promise.all([0,1,2,3].map(n => fetchJ(`commons/indice-${n}.json`, null)))
+  .then(p => p.some(Boolean) ? Object.assign({}, ...p.filter(Boolean)) : fetchJ('commons/indice.json', {}));
+Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), comIndice(), fetchJ('tools/revision.json', {})])
   .then(([j, t, c, r]) => { J = j; TS = t; CO = c; REV = r; contar(); pintar(); });
 </script>
 </body>

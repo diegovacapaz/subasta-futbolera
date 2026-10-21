@@ -1,11 +1,9 @@
 name: Fotos de Commons
 
 # Completa con fotos de Wikimedia Commons (de la cintura para arriba, fondo simple) a los jugadores
-# que TheSportsDB no cubre con un medio cuerpo. Va detrás de la descarga de TheSportsDB:
-# corre cada hora, procesa a los que ya fueron revisados allí y guarda cada 25 minutos.
+# que TheSportsDB no cubre con un medio cuerpo. Va detrás de la descarga de TheSportsDB, que la lanza
+# cuando guarda (si no está corriendo). Cuatro procesos en paralelo; cada uno guarda cada 25 minutos.
 on:
-  schedule:
-    - cron: '23 * * * *'
   workflow_dispatch:
     inputs:
       minutos:
@@ -20,12 +18,16 @@ permissions:
 
 concurrency:
   group: commons
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   commons:
     runs-on: ubuntu-latest
     timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [0, 1, 2, 3]     # cuatro procesos en paralelo, cada uno con un cuarto de los jugadores
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,12 +52,12 @@ jobs:
             [ "$RESTA" -lt 3 ] && break
             git pull -q --rebase -X theirs origin main || true     # traer lo último que revisó TheSportsDB
             T=$(( RESTA < 25 ? RESTA : 25 ))
-            python tools/commons.py --minutos "$T" --resumen /tmp/resumen.json
+            python tools/commons.py --minutos "$T" --resumen /tmp/resumen.json --parte ${{ matrix.parte }} --partes 4
             FOTOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['fotos'])")
             HECHOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['hechos'])")
             git add commons
             if ! git diff --cached --quiet; then
-              git commit -q -m "Fotos de Commons: $FOTOS jugadores con medio cuerpo"
+              git commit -q -m "Fotos de Commons (parte ${{ matrix.parte }}): $FOTOS jugadores con medio cuerpo"
               for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
             fi
             [ "$HECHOS" = "0" ] && break    # no hay más jugadores listos: sigue en la próxima hora

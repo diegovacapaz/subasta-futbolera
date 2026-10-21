@@ -51,11 +51,14 @@ jobs:
             REC=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['recortes'])")
             PEND=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['pendientes'])")
             HECHOS=$(python -c "import json;print(json.load(open('/tmp/resumen.json'))['hechos'])")
+            ESPERAS=$(python -c "import json;print(json.load(open('/tmp/resumen.json')).get('esperas', 0))")
             git add tsdb
             if ! git diff --cached --quiet; then
-              git commit -q -m "Recortes TheSportsDB: $REC jugadores con recorte, faltan revisar $PEND"
+              git commit -q -m "Recortes TheSportsDB: $REC jugadores con recorte, faltan revisar $PEND (esperas por límite: $ESPERAS)"
               for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
-              gh workflow run commons.yml --ref main || true    # que Commons complete a los recién revisados
+              # que Commons complete a los recién revisados (solo si no está corriendo: si corre, ya los toma)
+              ACTIVAS=$(gh run list --workflow commons.yml --limit 5 --json status -q '[.[] | select(.status != "completed")] | length' || echo 1)
+              [ "$ACTIVAS" = "0" ] && gh workflow run commons.yml --ref main || true
             fi
             echo "pendientes=$PEND" >> "$GITHUB_OUTPUT"
             echo "hechos=$HECHOS" >> "$GITHUB_OUTPUT"

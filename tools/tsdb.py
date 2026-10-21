@@ -17,6 +17,18 @@ import medio                      # noqa: E402
 API = 'https://www.thesportsdb.com/api/v1/json/{key}/searchplayers.php?p={q}'
 PAUSA = 2.2                       # segundos entre consultas: menos de 30 por minuto
 OK, NO = 't2', 'no1'              # estados finales ('no1' de la versión anterior sigue valiendo)
+SALTEADO = 'skip1'
+ESPERAS = [0]                     # veces que TheSportsDB pidió esperar (límite por minuto)                # no se consulta (poco valor): pasa directo a Commons
+# Se consulta TheSportsDB por: leyendas, jugadores de 3 M o más, liga argentina y clubes grandes.
+MIN_V = 3
+GRANDES = {'River Plate', 'Boca Juniors', 'Racing Club', 'Independiente', 'San Lorenzo', 'Real Madrid', 'Barcelona',
+           'Atlético de Madrid', 'Bayern Múnich', 'Borussia Dortmund', 'Manchester City', 'Manchester United', 'Liverpool',
+           'Arsenal', 'Chelsea', 'Tottenham Hotspur', 'Paris Saint-Germain', 'Juventus', 'Inter', 'AC Milan', 'Napoli',
+           'Benfica', 'Porto', 'Sporting CP', 'Ajax', 'Flamengo', 'Palmeiras'}
+
+
+def consultable(j):
+    return bool(j.get('ley')) or j.get('v', 0) >= MIN_V or j.get('lg') == 'ARG1' or j.get('club') in GRANDES
 VIEJO = 't1'                      # bajados con la versión anterior: se migran sin volver a consultar la API
 
 
@@ -29,6 +41,7 @@ def consultar(q, key):
             return data
         except urllib.error.HTTPError as e:
             if e.code == 429:
+                ESPERAS[0] += 1
                 time.sleep(65)
                 continue
             time.sleep(PAUSA)
@@ -134,12 +147,18 @@ def main():
         estado[k] = OK
     guardar()
 
+    # Los que no se consultan quedan marcados enseguida, así Commons los toma sin esperar.
+    for j in jug:
+        if not consultable(j) and estado.get(j['k']) not in (OK, NO, SALTEADO):
+            estado[j['k']] = SALTEADO
+    guardar()
+
     fin = time.time() + args.minutos * 60
     hechos = cuenta = 0
     stats = {'medio cuerpo': 0, 'solo cara': 0, 'sin recorte': 0, 'red': 0}
     for j in jug:
         k = j['k']
-        if estado.get(k) in (OK, NO):
+        if estado.get(k) in (OK, NO, SALTEADO):
             continue
         if time.time() > fin or (args.limite and cuenta >= args.limite):
             break
@@ -174,11 +193,11 @@ def main():
             guardar()
             print(f'{hechos} procesados · {stats}', flush=True)
     guardar()
-    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, NO))
+    pendientes = sum(1 for j in jug if estado.get(j['k']) not in (OK, NO, SALTEADO))
     con_m = sum(1 for v in indice.values() if 'm' in v)
-    print(f'Listo: {hechos} en esta corrida {stats}. Con medio cuerpo: {con_m}. Pendientes: {pendientes}.')
+    print(f'Listo: {hechos} en esta corrida {stats}. Con medio cuerpo: {con_m}. Pendientes: {pendientes}. Esperas por límite: {ESPERAS[0]}.')
     if args.resumen:
-        json.dump({'pendientes': pendientes, 'recortes': con_m, 'hechos': hechos}, open(args.resumen, 'w'))
+        json.dump({'pendientes': pendientes, 'recortes': con_m, 'hechos': hechos, 'esperas': ESPERAS[0]}, open(args.resumen, 'w'))
 
 
 if __name__ == '__main__':

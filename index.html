@@ -471,7 +471,13 @@ let FOTOS = {};
 function loadFotos(){
   try { fetch(ASSET + 'sil/fotos.json').then(r => r.ok ? r.json() : {}).then(j => { FOTOS = j || {}; }).catch(() => {}); } catch(e){}
   try { fetch(ASSET + 'tsdb/indice.json').then(r => r.ok ? r.json() : {}).then(j => { TSDB = j || {}; if (S && S.phase !== 'setup') render(); }).catch(() => {}); } catch(e){}
-  try { fetch(ASSET + 'commons/indice.json').then(r => r.ok ? r.json() : {}).then(j => { COM = j || {}; if (S && S.phase !== 'setup') render(); }).catch(() => {}); } catch(e){}
+  // Commons se procesa en 4 partes (indice-0..3.json); si todavía no hay partes, se usa el índice común.
+  try {
+    Promise.all([0,1,2,3].map(n => fetch(ASSET + 'commons/indice-' + n + '.json').then(r => r.ok ? r.json() : null).catch(() => null)))
+      .then(partes => partes.some(Boolean) ? Object.assign({}, ...partes.filter(Boolean))
+                                           : fetch(ASSET + 'commons/indice.json').then(r => r.ok ? r.json() : {}).catch(() => ({})))
+      .then(j => { COM = j || {}; if (S && S.phase !== 'setup') render(); });
+  } catch(e){}
 }
 function revealUrl(id){
   if (id < 0) return Promise.resolve('');

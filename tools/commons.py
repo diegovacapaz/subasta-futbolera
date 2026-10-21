@@ -179,6 +179,8 @@ def main():
     ap.add_argument('--limite', type=int, default=0)
     ap.add_argument('--solo', default='', help='nombres separados por | (para pruebas)')
     ap.add_argument('--resumen', default='')
+    ap.add_argument('--parte', type=int, default=0, help='qué parte procesar (para correr varias en paralelo)')
+    ap.add_argument('--partes', type=int, default=1)
     args = ap.parse_args()
 
     from rembg import new_session, remove
@@ -186,16 +188,23 @@ def main():
     fino = [None]   # modelo pesado (birefnet-portrait), solo si hace falta
     for d in ('m', 'f'):
         os.makedirs(os.path.join(args.salida, d), exist_ok=True)
-    pe, pi = os.path.join(args.salida, 'estado.json'), os.path.join(args.salida, 'indice.json')
-    estado = json.load(open(pe)) if os.path.exists(pe) else {}
-    indice = json.load(open(pi)) if os.path.exists(pi) else {}
     def leer(p):
         return json.load(open(p)) if os.path.exists(p) else {}
+    # Con varias partes en paralelo, cada una tiene su estado e índice (estado-N.json, indice-N.json)
+    # y arranca con lo que ya había en los archivos comunes de antes.
+    suf = f'-{args.parte}' if args.partes > 1 else ''
+    import zlib
+    mia = lambda k: args.partes <= 1 or zlib.crc32(k.encode()) % args.partes == args.parte
+    pe, pi = os.path.join(args.salida, f'estado{suf}.json'), os.path.join(args.salida, f'indice{suf}.json')
+    estado, indice = leer(pe), leer(pi)
+    if suf and not os.path.exists(pe):   # primera vez en partes: arranca con lo de los archivos comunes
+        estado = {k: v for k, v in leer(os.path.join(args.salida, 'estado.json')).items() if mia(k)}
+        indice = {k: v for k, v in leer(os.path.join(args.salida, 'indice.json')).items() if mia(k)}
     t_estado, t_indice = leer(os.path.join(args.tsdb, 'estado.json')), leer(os.path.join(args.tsdb, 'indice.json'))
     # Correcciones a mano (tools/revision.json, armado con revisar.html):
     #   {"<clave>": {"no": ["tsdb", "File:..."], "url": "https://... (otra foto)"}}
     rev = leer(os.path.join(os.path.dirname(args.lista), 'revision.json'))
-    prev = leer(os.path.join(args.salida, 'rev.json'))
+    prev = leer(os.path.join(args.salida, f'rev{suf}.json')) or {k: v for k, v in leer(os.path.join(args.salida, 'rev.json')).items() if mia(k)}
     firma = lambda k: json.dumps(rev.get(k), sort_keys=True) if k in rev else ''
     jug = json.load(open(args.lista))
     if args.solo:
@@ -203,11 +212,12 @@ def main():
         jug = [j for j in jug if j['n'] in nombres]
     else:   # solo los que TheSportsDB ya revisó y no tienen medio cuerpo
         veto = lambda k: 'tsdb' in (rev.get(k) or {}).get('no', [])
-        jug = [j for j in jug if (t_estado.get(j['k']) in ('t2', 'no1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
-               or j['k'] in rev]
+        jug = [j for j in jug if mia(j['k']) and (
+               (t_estado.get(j['k']) in ('t2', 'no1', 'skip1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
+               or j['k'] in rev)]
 
     def guardar():
-        json.dump(prev, open(os.path.join(args.salida, 'rev.json'), 'w'), separators=(',', ':'), sort_keys=True)
+        json.dump(prev, open(os.path.join(args.salida, f'rev{suf}.json'), 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(estado, open(pe, 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(indice, open(pi, 'w'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
 
