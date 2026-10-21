@@ -182,6 +182,7 @@ def main():
 
     from rembg import new_session, remove
     sessions = [new_session(m) for m in ('isnet-general-use', 'u2net_human_seg')]
+    fino = [None]   # modelo pesado (birefnet-portrait), solo si hace falta
     for d in ('m', 'f'):
         os.makedirs(os.path.join(args.salida, d), exist_ok=True)
     pe, pi = os.path.join(args.salida, 'estado.json'), os.path.join(args.salida, 'indice.json')
@@ -229,16 +230,30 @@ def main():
         if cs is None:
             stats['red'] += 1
             continue
+        # "Mal recortada" en la revisión: esa misma foto se vuelve a recortar primero, con un modelo más preciso
+        recortar = set(r.get('recortar', []))
+        if recortar and not r.get('url'):
+            presentes = {c['title'] for c in cs}
+            for t in recortar - presentes:
+                try:
+                    cs += [dict(c, anio=None, nombre_completo=True) for c in archivos(titles=t)]
+                except Exception:
+                    pass
         evaluadas = []
         for c in cs:
-            r = evaluar(c, j)
-            if r:
-                evaluadas.append((r, c))
+            ev = evaluar(c, j)
+            if ev:
+                evaluadas.append((ev, c))
             time.sleep(0.2)
-        evaluadas.sort(key=lambda x: -x[0][0])
+        evaluadas.sort(key=lambda x: (x[1]['title'] not in recortar, -x[0][0]))
         listo = None
-        for (puntos, crop, centro), c in evaluadas[:3]:
-            for s in sessions:
+        for (puntos, crop, centro), c in evaluadas[:3 + len(recortar)]:
+            ses = sessions
+            if c['title'] in recortar:
+                if fino[0] is None:
+                    fino[0] = new_session('birefnet-portrait')
+                ses = [fino[0]]
+            for s in ses:
                 cut = remove(crop, session=s, post_process_mask=True)
                 a = medio.limpiar(cut.getchannel('A'), centro, bordes=not c.get('manual'))
                 if a is not None:

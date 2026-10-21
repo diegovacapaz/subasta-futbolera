@@ -53,6 +53,7 @@ input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid v
 .mark{flex:none;border:1.5px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 10px;font-weight:700;font-size:13px}
 .mark[aria-pressed="true"]{border-color:var(--bad);color:var(--bad);background:var(--surface)}
 .url{font-size:13px;padding:6px 8px}
+.row .mark{flex:1 1 0}
 .more{display:block;margin:18px auto 0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 18px;font-weight:600}
 .foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:5;
   padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
@@ -69,7 +70,7 @@ textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;fo
 <body>
 <div id="app">
   <h1>Revisar <span>fotos</span></h1>
-  <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o quedaron feas. Si tenés otra foto mejor, pegá el link directo a la imagen. Al terminar tocá <b>Copiar cambios</b> y pasámelos por el chat: el proceso rehace esas fichas.</p>
+  <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o no sirven (se busca otra foto) y con <b>Mal recortada</b> las que te gustan pero quedaron mal cortadas (se vuelven a recortar con un modelo más preciso). Si tenés otra foto mejor, pegá el link directo a la imagen. Al terminar tocá <b>Copiar cambios</b> y pasámelos por el chat: el proceso rehace esas fichas.</p>
   <div class="bar">
     <div class="chips" id="chips"></div>
     <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
@@ -121,14 +122,15 @@ function chips(){
 }
 function ficha(j, f){
   const m = marcas[j.k] || {};
-  return `<article class="card ${m.mal ? 'mal' : ''}" data-k="${j.k}">
+  return `<article class="card ${m.mal || m.recorte ? 'mal' : ''}" data-k="${j.k}">
     <div class="pics">${f.f ? `<div><img loading="lazy" src="${f.f}" alt="Foto de ${esc(j.n)}"></div><div><img loading="lazy" src="${f.m}" alt="Silueta"></div>`
                             : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
     <div class="info">
       <div class="name" title="${esc(j.n)}">${esc(j.n)}</div>
       <div class="meta"><span>${j.ley ? 'Leyenda' : 'Actual'} · ${j.by || '—'}</span><span>${f.tipo === 'tsdb' ? 'TheSportsDB' : f.tipo === 'commons' ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">Commons</a>` : 'Busto o genérica'}</span></div>
-      <div class="row">${f.tipo !== 'nada' ? `<button class="mark" data-a="mal" aria-pressed="${!!m.mal}">Está mal</button>` : ''}
-        <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}"></div>
+      ${f.tipo !== 'nada' ? `<div class="row"><button class="mark" data-a="mal" aria-pressed="${!!m.mal}" title="No es él, o la foto no sirve: se busca otra">Está mal</button>
+        <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por una foto de Commons' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
+      <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
     </div></article>`;
 }
 function pintar(){
@@ -150,6 +152,10 @@ function cambios(){
     const f = fuente(j), r = out[k] || {no: []};
     r.no = r.no || [];
     if (m.mal && f.id && !r.no.includes(f.id)) r.no.push(f.id);
+    if (m.recorte && f.id){
+      if (f.tipo === 'tsdb'){ if (!r.no.includes('tsdb')) r.no.push('tsdb'); }      // el recorte de TheSportsDB no se puede rehacer: se reemplaza
+      else { r.recortar = r.recortar || []; if (!r.recortar.includes(f.id)) r.recortar.push(f.id); }
+    }
     if (m.url) r.url = m.url;
     out[k] = r;
   }
@@ -159,11 +165,13 @@ document.addEventListener('click', e => {
   const c = e.target.closest('.chip');
   if (c){ filtro = c.dataset.f; pagina = 1; pintar(); return; }
   if (e.target.id === 'more'){ pagina++; pintar(); return; }
-  const b = e.target.closest('[data-a="mal"]');
+  const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
   if (b){
-    const k = b.closest('.card').dataset.k, m = marcas[k] || {};
-    m.mal = !m.mal; if (!m.mal && !m.url) delete marcas[k]; else marcas[k] = m;
-    b.setAttribute('aria-pressed', String(!!m.mal)); b.closest('.card').classList.toggle('mal', !!m.mal); guardar();
+    const card = b.closest('.card'), k = card.dataset.k, m = marcas[k] || {}, campo = b.dataset.a;
+    m[campo] = !m[campo];
+    if (m[campo]){ const otro = campo === 'mal' ? 'recorte' : 'mal'; m[otro] = false; const ob = card.querySelector(`[data-a="${otro}"]`); if (ob) ob.setAttribute('aria-pressed', 'false'); }
+    if (!m.mal && !m.recorte && !m.url) delete marcas[k]; else marcas[k] = m;
+    b.setAttribute('aria-pressed', String(!!m[campo])); card.classList.toggle('mal', !!(m.mal || m.recorte)); guardar();
   }
 });
 document.addEventListener('input', e => {
@@ -171,7 +179,7 @@ document.addEventListener('input', e => {
   if (e.target.dataset.a === 'url'){
     const k = e.target.closest('.card').dataset.k, m = marcas[k] || {}, v = e.target.value.trim();
     if (v) m.url = v; else delete m.url;
-    if (!m.mal && !m.url) delete marcas[k]; else marcas[k] = m;
+    if (!m.mal && !m.recorte && !m.url) delete marcas[k]; else marcas[k] = m;
     guardar();
   }
 });
