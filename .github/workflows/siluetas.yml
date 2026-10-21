@@ -74,6 +74,15 @@ jobs:
             [ "$HECHOS" = "0" ] && break
           done
 
+      - name: Guardar lo hecho si se corta
+        if: cancelled() || failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sil
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Siluetas: avance guardado al cortar"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
       - name: Seguir si faltan
         if: success() && steps.gen.outputs.pendientes != '0' && steps.gen.outputs.hechos != '0'
         env:
