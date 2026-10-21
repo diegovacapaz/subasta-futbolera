@@ -5,6 +5,10 @@ name: Marcas de la revisión
 # Cada corrida dura unas 5 horas y al terminar se vuelve a lanzar; el horario es solo un respaldo por si la cadena se corta.
 on:
   workflow_dispatch:
+    inputs:
+      minutos:
+        description: Minutos que se queda leyendo (con 1 lee una sola vez)
+        default: '300'
   schedule:
     - cron: '41 */3 * * *'
   push:
@@ -31,7 +35,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          FIN=$(( $(date +%s) + 300 * 60 ))
+          FIN=$(( $(date +%s) + ${{ github.event.inputs.minutos || '300' }} * 60 ))
           while [ "$(date +%s)" -lt "$FIN" ]; do
             git pull -q --rebase -X theirs origin main || true
             R=$(python3 tools/sincronizar.py || echo error)
@@ -44,6 +48,7 @@ jobs:
               ACTIVAS=$(gh run list --workflow commons.yml --limit 5 --json status -q '[.[] | select(.status != "completed")] | length' || echo 1)
               [ "$ACTIVAS" = "0" ] && gh workflow run commons.yml --ref main -f minutos=60 || true
             fi
+            [ "$(( FIN - $(date +%s) ))" -gt 300 ] || break
             sleep 300
           done
       - name: Seguir leyendo
