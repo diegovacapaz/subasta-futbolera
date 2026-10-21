@@ -39,7 +39,7 @@ jobs:
           while [ "$(date +%s)" -lt "$FIN" ]; do
             git pull -q --rebase -X theirs origin main || true
             R=$(python3 tools/sincronizar.py || echo error)
-            echo "$(date -u +%H:%M) $R"
+            echo "::notice::$(date -u +%H:%M) $R"
             git add tools/revision.json
             if ! git diff --cached --quiet; then
               git commit -q -m "Revisión: marcas de los revisores ($(echo "$R" | cut -d' ' -f2) jugadores)"
