@@ -364,7 +364,8 @@ form.addEventListener('submit', e => {
   if (t !== 'troll' && by && (by < 1850 || by > 2015)){ msg.innerHTML = '<span class="aviso">El año de nacimiento no parece correcto.</span>'; return; }
   if (fotoUrl && !/^https?:\/\/\S+$/.test(foto)){ msg.innerHTML = '<span class="aviso">El link de la foto tiene que empezar con https://</span>'; return; }
   // Ya existe si es el mismo nombre, o si uno contiene al otro (Labruna / Ángel Labruna) y nacieron el mismo año
-  const limpio = x => ' ' + norm(x.replace(/\s*\(.*?\)/g, '')).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  // (a los trolls se los compara con la aclaración incluida: puede haber varias versiones del mismo)
+  const limpio = x => ' ' + norm(t === 'troll' ? x : x.replace(/\s*\(.*?\)/g, '')).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   const base = limpio(n);
   const igual = J.find(j => { if (!!j.troll !== (t === 'troll')) return false;   // un troll puede ser la versión mala de un crack
     const o = limpio(j.n);
