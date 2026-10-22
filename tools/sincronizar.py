@@ -73,7 +73,20 @@ def sumar(base, extra):
     return base
 
 
+def pendientes():
+    """Cuántas fichas de revision.json todavía no rehizo el proceso de Commons (su firma no coincide)."""
+    import glob
+    rev = leer(os.path.join(AQUI, 'revision.json'), {})
+    hechas = {}
+    for f in glob.glob(os.path.join(AQUI, '..', 'commons', 'rev-*.json')):
+        hechas.update(leer(f, {}))
+    return sum(1 for k, r in rev.items() if hechas.get(k) != json.dumps(r, sort_keys=True))
+
+
 def main():
+    if sys.argv[1:] == ['--pendientes']:
+        print(pendientes())
+        return
     claves = {j['k'] for j in leer(os.path.join(AQUI, 'jugadores.json'), [])}
     txt = open(sys.argv[1]).read() if len(sys.argv) > 1 else bajar()
     rev = sumar(armar(txt, claves), leer(os.path.join(AQUI, 'revision-manual.json'), {}))

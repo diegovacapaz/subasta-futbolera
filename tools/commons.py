@@ -272,7 +272,7 @@ def main():
         cs = candidatas(j)
         if cs is not None:
             cs = [c for c in cs if c['title'] not in r.get('no', [])]
-            if r.get('url'):    # foto propuesta en la revisión: se prueba primero
+            if r.get('url') and r['url'] not in r.get('no', []):    # foto propuesta en la revisión: se prueba primero
                 cs.insert(0, {'title': r['url'], 'thumb': r['url'], 'anio': None, 'nombre_completo': True, 'manual': True})
         if cs is None:
             stats['red'] += 1
