@@ -84,6 +84,9 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
 .campos .check{grid-column:1/-1;color:var(--ink);font-weight:600}
 .campos .check input{width:auto;margin-right:6px}
 .name-row{display:flex;gap:8px;align-items:center;justify-content:space-between;min-width:0}
+.acciones{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.subir{cursor:pointer}
+.subir input{position:absolute;width:1px;height:1px;opacity:0}
 .quitar{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:600;color:var(--muted)}
 .aviso{font-size:13px;font-weight:600;color:var(--bad);margin:0}
 </style>
@@ -97,6 +100,8 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
     <div class="chips" id="chips" role="group" aria-label="Jugadores"></div>
     <div class="chips seg" id="fotos" role="group" aria-label="Foto"></div>
     <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
+    <input class="search" id="equipo" type="search" list="clubes" placeholder="Filtrar por equipo" aria-label="Filtrar por equipo" autocomplete="off">
+    <datalist id="clubes"></datalist>
     <button class="ghost" id="nuevo" aria-expanded="false" aria-controls="alta">+ Agregar jugador</button>
   </div>
   <form id="alta" class="alta" hidden>
@@ -113,8 +118,9 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
       <label data-solo="actual" data-modo="alta">Liga<select name="lg"></select></label>
       <label data-solo="leyenda actual">Valor (millones)<input name="v" type="number" min="0" max="300" step="0.5" value="40"></label>
       <label data-solo="troll">Precio trampa (millones)<input name="precio" type="number" min="1" max="300" value="45"></label>
-      <label class="ancho" data-modo="alta">Link a una foto (opcional)<input name="foto" type="url" placeholder="Si no ponés, se busca sola"></label>
-      <label class="ancho check" data-modo="edita"><span><input name="oculto" type="checkbox"> Quitar del juego (no sale más en el sorteo)</span></label>
+      <label class="ancho" data-modo="alta">Link a una foto (opcional)<input name="foto" type="url" placeholder="Si no ponés ni link ni archivo, se busca sola"></label>
+      <label class="ancho" data-modo="alta">…o subí una foto desde tu compu o celular<input name="archivo" type="file" accept="image/*"></label>
+      <label class="ancho check" data-modo="edita"><span><input name="oculto" type="checkbox"> Eliminar del juego (no sale más en el sorteo)</span></label>
     </div>
     <p class="note" id="altamsg"></p>
     <div class="row"><button class="primary" type="submit" id="altaok">Agregar</button><button class="ghost" type="button" id="altacancel">Cancelar</button></div>
@@ -132,7 +138,7 @@ const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSc_ze1VE8cRkpEAdbEj3dt8Ew
 const ENTRY = {clave: 'entry.106100299', accion: 'entry.240074220', valor: 'entry.1169776155', revisor: 'entry.1246452984'};
 const CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8SOBIPVzFFUOIEp7LPiOu76u5JYCZ5XD8Gsn-CN_ps-TV7-ziAKmKbTv8CMYZgGrAmy4iMNN7sMqG/pub?gid=1439134911&single=true&output=csv';
 const KEY = 'subasta-revision-2', KEY_VIEJA = 'subasta-revision', KEY_YO = 'subasta-revisor';
-let J = [], TS = {}, CO = {}, RV = {}, FA = {}, REV = {}, grupo = 'todos', foto = 'con', q = '', pagina = 1, listo = false;
+let J = [], TS = {}, CO = {}, RV = {}, FA = {}, REV = {}, grupo = 'todos', foto = 'con', equipo = '', q = '', pagina = 1, listo = false;
 const leerLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch(e){ return d; } };
 const grabarLS = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch(e){} };
 let mias = leerLS(KEY, {});        // marcas hechas en este navegador: {clave: {id, mal, recorte, url, t, quien, enviada}}
@@ -177,18 +183,21 @@ function pyDumps(x){
 }
 // Última marca de la ficha (de quien sea) y si el proceso ya la aplicó
 function ultima(k){ const a = todas[k], b = mias[k]; return !a ? b : !b ? a : (b.t > a.t ? b : a); }
+const RAW = 'https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/';
+const urlReal = u => u && u.startsWith('subida:') ? RAW + u.slice(7) + '.jpg' : u;
 function aplicada(k, m){
   const r = REV[k]; if (!m || !r) return false;
   const no = r.no || [], rec = r.recortar || [];
-  const pide = (!m.mal || no.includes(m.id)) && (!m.recorte || (m.id === 'tsdb' ? no.includes('tsdb') : rec.includes(m.id))) && (!m.url || r.url === m.url);
+  const pide = (!m.mal || no.includes(m.id)) && (!m.recorte || (m.id === 'tsdb' ? no.includes('tsdb') : rec.includes(m.id))) && (!m.url || r.url === urlReal(m.url));
   return pide && RV[k] === pyDumps(r);
 }
 function nota(j, f){
   const m = ultima(j.k); if (!m || !(m.mal || m.recorte || m.url)) return '';
   const por = m.quien ? ` (${m.quien === yo ? 'vos' : esc(m.quien)})` : '';
-  if (!aplicada(j.k, m)) return `<div class="who">En proceso${por}: se aplica en unos minutos</div>`;
-  if (m.url && FA[j.k] === m.url) return `<div class="who">No se pudo usar el link${por}: tiene que verse él solo, de la cintura para arriba. Probá con otra foto o con el link directo a la imagen.</div>`;
-  if (m.url) return `<div class="ok">Foto del link aplicada${por}</div>`;
+  if (!aplicada(j.k, m)) return `<div class="who">${m.url && m.url.startsWith('subida:') ? 'Foto subida, en proceso' : 'En proceso'}${por}: se aplica en unos minutos</div>`;
+  const sub = m.url && m.url.startsWith('subida:');
+  if (m.url && FA[j.k] === urlReal(m.url)) return `<div class="who">No se pudo usar ${sub ? 'la foto subida' : 'el link'}${por}: tiene que verse él solo, de la cintura para arriba. Probá con otra foto o con el link directo a la imagen.</div>`;
+  if (m.url) return `<div class="ok">${sub ? 'Foto subida' : 'Foto del link'} aplicada${por}</div>`;
   if (m.id !== f.id) return `<div class="ok">Foto nueva: la anterior se marcó mal${por}</div>`;
   if (m.recorte) return `<div class="ok">Ya se volvió a recortar${por}. Si sigue mal, marcá Está mal.</div>`;
   return '';
@@ -198,9 +207,11 @@ const GRANDES = new Set(['River Plate','Boca Juniors','Racing Club','Independien
   'Borussia Dortmund','Manchester City','Manchester United','Liverpool','Arsenal','Chelsea','Tottenham Hotspur','Paris Saint-Germain','Juventus',
   'Inter','AC Milan','Napoli','Benfica','Porto','Sporting CP','Ajax','Flamengo','Palmeiras']);
 // Dos filtros que se combinan: qué jugadores (grupo) y qué pasa con su foto
-const GRUPOS = [['todos','Todos'], ['tops','Tops'], ['actuales','Actuales'], ['ley','Leyendas'], ['troll','Trolls'], ['alta','Agregados'], ['marcadas','Marcadas']];
+const GRUPOS = [['todos','Todos'], ['tops','Tops'], ['actuales','Actuales'], ['ley','Leyendas'], ['troll','Trolls'], ['alta','Agregados'], ['marcadas','Marcadas'], ['eliminados','Eliminados']];
 const FOTOS = [['todas','Todas'], ['con','Con foto'], ['sin','Sin foto'], ['tsdb','TheSportsDB'], ['commons','Commons']];
 function enGrupo(j, f, g){
+  if (g === 'eliminados') return !!j.oculto;
+  if (j.oculto) return false;
   if (g === 'tops') return !j.troll && GRANDES.has(j.club);
   if (g === 'actuales') return !j.troll && !j.ley;
   if (g === 'ley') return !!j.ley;
@@ -215,7 +226,8 @@ function conFoto(f, x){
   if (x === 'tsdb' || x === 'commons') return f.tipo === x;
   return true;
 }
-const pasa = (j, f) => enGrupo(j, f, grupo) && conFoto(f, foto);
+const enEquipo = j => !equipo || norm(j.club || '').includes(norm(equipo));
+const pasa = (j, f) => enEquipo(j) && enGrupo(j, f, grupo) && conFoto(f, foto);
 try { const g = JSON.parse(localStorage.getItem('subasta-revision-filtros') || '{}'); if (g.grupo) grupo = g.grupo; if (g.foto) foto = g.foto; } catch(e){}
 function lista(){
   const nq = norm(q.trim());
@@ -223,7 +235,7 @@ function lista(){
 }
 function chips(){
   const ng = {}, nf = {};
-  J.forEach(j => { const f = fuente(j);
+  J.forEach(j => { if (!enEquipo(j)) return; const f = fuente(j);
     GRUPOS.forEach(([g]) => { if (enGrupo(j, f, g) && conFoto(f, foto)) ng[g] = (ng[g] || 0) + 1; });
     if (enGrupo(j, f, grupo)) FOTOS.forEach(([x]) => { if (conFoto(f, x)) nf[x] = (nf[x] || 0) + 1; }); });
   const fila = (lista, n, act, tipo) => lista.map(([id, l]) =>
@@ -239,13 +251,15 @@ function ficha(j, f){
                             : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
     <div class="info">
       <div class="name-row"><div class="name" title="${esc(j.n)}">${esc(j.n)}</div><button class="quitar" data-editar="${j.k}">Editar</button></div>
-      ${j.oculto ? `<div class="who">Quitado del juego${j.edq ? ' por ' + esc(j.edq) : ''}</div>` : ''}
+      ${j.oculto ? `<div class="who">Eliminado del juego${j.edq ? ' por ' + esc(j.edq) : ''}</div>` : ''}
       <div class="meta"><span>${j.troll ? 'Troll' : (j.ley ? 'Leyenda' : 'Actual') + ' · ' + (j.by || '—')}</span><span>${f.tipo === 'tsdb' ? (j.troll ? 'Foto del pack' : 'TheSportsDB') : f.tipo === 'commons' ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">Commons</a>` : 'Busto o genérica'}</span></div>
       ${f.tipo !== 'nada' ? `<div class="row"><button class="mark" data-a="mal" aria-pressed="${!!m.mal}" title="No es él, o la foto no sirve: se busca otra">Está mal</button>
         <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por otra foto' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
-      <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
+      <input class="url" data-a="url" value="${esc(m.url && !m.url.startsWith('subida:') ? m.url : '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
       <div class="nota">${nota(j, f)}</div>
-      ${j.alta ? `<div class="meta"><span>${j.nuevo ? 'Recién agregado: en unos minutos entra al juego y se le busca foto' : 'Agregado desde esta página'}</span><button class="quitar" data-quitar="${j.k}">Quitar</button></div>` : ''}
+      ${j.alta ? `<div class="meta"><span>${j.nuevo ? 'Recién agregado: en unos minutos entra al juego y se le busca foto' : 'Agregado desde esta página'}</span></div>` : ''}
+      <div class="acciones"><label class="quitar subir">Subir foto<input type="file" accept="image/*" data-subir="${j.k}"></label>
+        <button class="quitar" data-quitar="${j.k}">${j.oculto ? 'Restaurar' : 'Eliminar'}</button></div>
     </div></article>`;
 }
 function pintar(){
@@ -408,7 +422,7 @@ function abrirAlta(abrir, j){
     form.scrollIntoView({block: 'start', behavior: 'smooth'}); form.n.focus({preventScroll: true});
   }
 }
-form.addEventListener('submit', e => {
+form.addEventListener('submit', async e => {
   e.preventDefault();
   const msg = document.getElementById('altamsg');
   if (!yo) return pedirNombre();
@@ -439,6 +453,12 @@ form.addEventListener('submit', e => {
   const a = {k: 'a-' + slug(n) + (by ? '-' + by : ''), tipo: t, n, p: form.p.value, nat: form.nat.value.trim(), by,
              club: t === 'troll' ? '' : form.club.value.trim(), lg: t === 'actual' ? form.lg.value : '',
              v: t === 'troll' ? null : (+form.v.value || 1), precio: t === 'troll' ? (+form.precio.value || 40) : null, foto: fotoUrl, baja: false, t: Date.now()};
+  const archivo = form.archivo.files[0];
+  if (archivo){
+    msg.textContent = 'Subiendo la foto…';
+    try { a.foto = await subirFoto(a.k, archivo); }
+    catch(err){ msg.innerHTML = '<span class="aviso">No se pudo leer esa imagen. Probá con otra (JPG o PNG).</span>'; return; }
+  }
   misAltas[a.k] = a; grabarLS('subasta-altas', misAltas); enviarAlta(a);
   mezclarAltas();
   abrirAlta(false);
@@ -447,13 +467,45 @@ form.addEventListener('submit', e => {
 });
 document.getElementById('altacancel').addEventListener('click', () => abrirAlta(false));
 document.getElementById('nuevo').addEventListener('click', () => abrirAlta(form.hidden || !!editando));
+function datosEd(j){
+  const e = {n: j.n, p: j.p || 'MC', nat: j.nat || ''};
+  if (j.troll) e.precio = j.precio ?? 40; else { if (j.by) e.by = j.by; e.club = j.club || ''; e.v = j.v; }
+  return e;
+}
 function quitar(k){
   const j = J.find(x => x.k === k); if (!j) return;
-  const a = misAltas[k] || altasHoja[k] || {};
-  const baja = {...a, k, tipo: j.troll ? 'troll' : j.ley ? 'leyenda' : 'actual', n: a.n || j.n, p: a.p || 'MC', baja: true, t: Date.now()};
-  delete baja.enviada; delete baja.quien;
-  misAltas[k] = baja; grabarLS('subasta-altas', misAltas); enviarAlta(baja);
-  mezclarAltas(); pintar(); pie(`<b>${esc(j.n)}</b> quitado del juego.`);
+  const ed = {...datosEd(j), oculto: !j.oculto, t: Date.now()};
+  misEd[k] = ed; grabarLS('subasta-ediciones', misEd); enviarEdicion(k, ed);
+  mezclarAltas(); pintar(); pie(`<b>${esc(j.n)}</b> ${ed.oculto ? 'eliminado del juego. Lo encontrás en Eliminados por si querés restaurarlo.' : 'restaurado.'}`);
+}
+
+// --- Fotos subidas: se achican en el navegador y viajan en partes por el formulario ---
+function comprimir(archivo, lado = 720, calidad = 0.85){
+  return new Promise((ok, mal) => {
+    const url = URL.createObjectURL(archivo), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, lado / Math.max(im.width, im.height)), c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      let q = calidad, d = c.toDataURL('image/jpeg', q);
+      while (d.length > 110000 && q > 0.45){ q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+      ok(d);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); mal(new Error('no es una imagen')); };
+    im.src = url;
+  });
+}
+async function subirFoto(k, archivo){
+  const datos = await comprimir(archivo);
+  const id = (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)).replace(/[^a-z0-9]/g, '');
+  const partes = []; for (let i = 0; i < datos.length; i += 30000) partes.push(datos.slice(i, i + 30000));
+  for (let i = 0; i < partes.length; i++){
+    const body = new URLSearchParams({[ENTRY.clave]: k, [ENTRY.accion]: 'foto', [ENTRY.revisor]: yo,
+      [ENTRY.valor]: JSON.stringify({id, i, n: partes.length, d: partes[i], t: Date.now()})});
+    await fetch(FORM, {method: 'POST', mode: 'no-cors', body});
+  }
+  return 'subida:' + id;
 }
 
 // --- Interacción ---
@@ -492,8 +544,9 @@ document.addEventListener('click', e => {
   const qb = e.target.closest('[data-quitar]');
   if (qb){
     if (!yo) return pedirNombre();
-    if (qb.dataset.ok){ quitar(qb.dataset.quitar); return; }
-    qb.dataset.ok = '1'; qb.textContent = '¿Seguro? Tocá de nuevo'; setTimeout(() => { if (qb.isConnected){ delete qb.dataset.ok; qb.textContent = 'Quitar'; } }, 4000);
+    const j = J.find(x => x.k === qb.dataset.quitar);
+    if (qb.dataset.ok || (j && j.oculto)){ quitar(qb.dataset.quitar); return; }
+    qb.dataset.ok = '1'; qb.textContent = '¿Seguro? Tocá de nuevo'; setTimeout(() => { if (qb.isConnected){ delete qb.dataset.ok; qb.textContent = 'Eliminar'; } }, 4000);
     return;
   }
   const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
@@ -504,8 +557,18 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q'){ q = e.target.value; pagina = 1; pintar(); }
+  if (e.target.id === 'equipo'){ equipo = e.target.value.trim(); pagina = 1; pintar(); }
 });
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
+  if (e.target.dataset.subir){
+    const inp = e.target, k = inp.dataset.subir, archivo = inp.files[0]; if (!archivo) return;
+    if (!yo){ inp.value = ''; return pedirNombre(); }
+    pie('Subiendo la foto…');
+    try { const u = await subirFoto(k, archivo); cambiar(inp.closest('.card'), {url: u}); pie('Foto subida. Se aplica en unos minutos.'); }
+    catch(err){ pie('<span class="aviso">No se pudo leer esa imagen. Probá con otra (JPG o PNG).</span>'); }
+    inp.value = '';
+    return;
+  }
   if (e.target.dataset.a !== 'url') return;
   if (!yo){ pedirNombre(); return; }
   const v = e.target.value.trim();
@@ -528,6 +591,9 @@ const leerProceso = () => Promise.all([fetchJ('tsdb/indice.json', TS), comIndice
 Promise.all([fetchJ('tools/jugadores.json', []), leerProceso()])
   .then(([j]) => {
     J = j; listo = true; mezclarAltas();
+    const cuenta = {}; J.forEach(x => { if (x.club && x.club !== '—') cuenta[x.club] = (cuenta[x.club] || 0) + 1; });
+    document.getElementById('clubes').innerHTML = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b))
+      .map(c => `<option value="${esc(c)}"></option>`).join('');
     // Marcas de la versión anterior de esta página (guardadas solo en este navegador): se pasan a la hoja compartida
     const viejas = leerLS(KEY_VIEJA, {});
     for (const [k, m] of Object.entries(viejas)){

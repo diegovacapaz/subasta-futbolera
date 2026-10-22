@@ -12,6 +12,9 @@ precio, foto, baja, t}): los guarda en tools/altas.json (en orden de alta, nunca
 y los suma a tools/jugadores.json para que los procesos les busquen foto. Si trajeron link de foto, va primero.
 Y las ediciones (accion = "edita", valor = {n, p, nat, by, club, v, precio, oculto, t}): vale la más nueva de cada
 jugador; quedan en tools/ediciones.json (el juego las aplica al abrir) y se aplican también a tools/jugadores.json.
+Las fotos subidas como archivo llegan en partes (accion = "foto", valor = {id, i, n, d: pedazo del data URL, t}):
+cuando están todas se guardan en fotos/subidas/<id>.jpg, y un link "subida:<id>" (en una marca o en un alta)
+pasa a ser la dirección de ese archivo en GitHub.
 Escribe los archivos solo si cambiaron; imprime "cambio N" o "igual", y "altas" si cambió la lista de agregados.
 """
 import csv, io, json, os, sys, urllib.request
@@ -19,6 +22,52 @@ import csv, io, json, os, sys, urllib.request
 CSV = ('https://docs.google.com/spreadsheets/d/e/2PACX-1vR8SOBIPVzFFUOIEp7LPiOu76u5JYCZ5XD8Gsn-CN_ps-TV7-ziAKmKbTv8CMYZgGrAmy4iMNN7sMqG'
        '/pub?gid=1439134911&single=true&output=csv')
 AQUI = os.path.dirname(os.path.abspath(__file__))
+SUBIDAS = os.path.join(AQUI, '..', 'fotos', 'subidas')
+RAW = 'https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/'
+
+
+def subidas(txt):
+    """Arma las fotos subidas en partes y las guarda. Devuelve cuántas nuevas."""
+    import base64, re
+    partes = {}
+    for f in csv.DictReader(io.StringIO(txt)):
+        if f.get('accion') != 'foto':
+            continue
+        try:
+            v = json.loads(f.get('valor') or '')
+            fid, i, n, d = str(v['id']), int(v['i']), int(v['n']), str(v['d'])
+        except Exception:
+            continue
+        if not re.fullmatch(r'[a-z0-9]{6,40}', fid) or not 0 <= i < n <= 12:
+            continue
+        partes.setdefault(fid, {'n': n, 'd': {}})['d'][i] = d
+    nuevas = 0
+    for fid, p in partes.items():
+        dest = os.path.join(SUBIDAS, fid + '.jpg')
+        if os.path.exists(dest) or len(p['d']) != p['n']:
+            continue
+        datos = ''.join(p['d'][i] for i in range(p['n']))
+        try:
+            crudo = base64.b64decode(datos.split(',', 1)[1] if datos.startswith('data:') else datos, validate=False)
+        except Exception:
+            continue
+        if not crudo.startswith(b'\xff\xd8') or len(crudo) > 3_000_000:     # solo JPEG
+            continue
+        os.makedirs(SUBIDAS, exist_ok=True)
+        open(dest, 'wb').write(crudo)
+        nuevas += 1
+    return nuevas
+
+
+def link(url):
+    """Un link de foto válido: http(s), o "subida:<id>" de una foto ya armada. '' si no sirve."""
+    url = str(url or '').strip()
+    if url.startswith('subida:'):
+        fid = url[7:]
+        return RAW + fid + '.jpg' if fid.isalnum() and os.path.exists(os.path.join(SUBIDAS, fid + '.jpg')) else ''
+    if not url.startswith(('https://', 'http://')) or len(url) > 1000 or any(c.isspace() for c in url):
+        return ''
+    return url
 
 
 def leer(p, d):
@@ -45,9 +94,7 @@ def armar(txt, claves):
         except Exception:
             continue
         foto = str(v.get('id') or '')[:400]
-        url = str(v.get('url') or '').strip()
-        if url and (not url.startswith(('https://', 'http://')) or len(url) > 1000 or any(c.isspace() for c in url)):
-            url = ''
+        url = link(v.get('url'))
         e = {'t': t, 'mal': bool(v.get('mal')), 'recorte': bool(v.get('recorte')), 'url': url}
         if foto and ((k, foto) not in ult or t >= ult[(k, foto)]['t']):
             ult[(k, foto)] = e
@@ -114,8 +161,6 @@ def altas(txt):
         if tipo not in TIPOS or not n or p_ not in PUESTOS:
             continue
         foto = texto(v.get('foto'), 1000)
-        if foto and (not foto.startswith(('https://', 'http://')) or ' ' in foto):
-            foto = ''
         a = {'k': k, 'tipo': tipo, 'n': n, 'p': p_, 'nat': texto(v.get('nat'), 40), 'by': None if tipo == 'troll' else num(v.get('by'), 1850, 2015),
              'club': '' if tipo == 'troll' else texto(v.get('club'), 50), 'lg': texto(v.get('lg'), 8) if tipo == 'actual' else '',
              'v': num(v.get('v'), 0, 300, 1), 'precio': num(v.get('precio'), 1, 300, 40) if tipo == 'troll' else None,
@@ -240,11 +285,12 @@ def main():
         print(pendientes())
         return
     txt = open(sys.argv[1]).read() if len(sys.argv) > 1 else bajar()
+    subidas(txt)
     lista, cambio_altas = altas(txt)
     ed = ediciones(txt)
     claves = {j['k'] for j in jugadores_con_altas(lista, ed)}
     # a los agregados se les busca foto (con el link que trajeron, si trajeron)
-    extra = {a['k']: ({'url': a['foto']} if a.get('foto') else {}) for a in lista if not a.get('baja')}
+    extra = {a['k']: ({'url': link(a['foto'])} if link(a.get('foto')) else {}) for a in lista if not a.get('baja')}
     extra = sumar(extra, leer(os.path.join(AQUI, 'revision-manual.json'), {}))
     rev = sumar(armar(txt, claves), extra)
     for r in rev.values():
