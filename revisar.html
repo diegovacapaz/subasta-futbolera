@@ -37,6 +37,10 @@ input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid v
 .chip span{font-family:var(--f-num);color:var(--muted);margin-left:4px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .chip[aria-pressed="true"] span{color:inherit;opacity:.7}
+.seg{gap:0;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.seg .chip{border:0;border-radius:0;border-left:1px solid var(--line)}
+.seg .chip:first-child{border-left:0}
+.seg .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .search{flex:1 1 220px;max-width:340px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .card{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;overflow:hidden;display:grid;min-width:0}
@@ -79,7 +83,8 @@ textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;fo
   <p class="lede">Cada ficha muestra la foto que eligió el proceso y su silueta. Marcá con <b>Está mal</b> las que no son el jugador o no sirven (se busca otra foto) y con <b>Mal recortada</b> las que te gustan pero quedaron mal cortadas (se vuelven a recortar con un modelo más preciso). Si tenés otra foto mejor, pegá el link directo a la imagen. Las marcas se comparten con todos los que revisan y el proceso las aplica solo, en un rato.</p>
   <div class="bar">
     <input class="yo" id="yo" placeholder="Tu nombre" aria-label="Tu nombre" autocomplete="nickname" maxlength="40">
-    <div class="chips" id="chips"></div>
+    <div class="chips" id="chips" role="group" aria-label="Jugadores"></div>
+    <div class="chips seg" id="fotos" role="group" aria-label="Foto"></div>
     <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
   </div>
   <div id="list"><p class="status">Cargando jugadores…</p></div>
@@ -95,7 +100,7 @@ const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSc_ze1VE8cRkpEAdbEj3dt8Ew
 const ENTRY = {clave: 'entry.106100299', accion: 'entry.240074220', valor: 'entry.1169776155', revisor: 'entry.1246452984'};
 const CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8SOBIPVzFFUOIEp7LPiOu76u5JYCZ5XD8Gsn-CN_ps-TV7-ziAKmKbTv8CMYZgGrAmy4iMNN7sMqG/pub?gid=1439134911&single=true&output=csv';
 const KEY = 'subasta-revision-2', KEY_VIEJA = 'subasta-revision', KEY_YO = 'subasta-revisor';
-let J = [], TS = {}, CO = {}, RV = {}, FA = {}, REV = {}, filtro = 'todos', q = '', pagina = 1, listo = false;
+let J = [], TS = {}, CO = {}, RV = {}, FA = {}, REV = {}, grupo = 'todos', foto = 'con', q = '', pagina = 1, listo = false;
 const leerLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch(e){ return d; } };
 const grabarLS = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch(e){} };
 let mias = leerLS(KEY, {});        // marcas hechas en este navegador: {clave: {id, mal, recorte, url, t, quien, enviada}}
@@ -153,26 +158,39 @@ function nota(j, f){
 const GRANDES = new Set(['River Plate','Boca Juniors','Racing Club','Independiente','San Lorenzo','Real Madrid','Barcelona','Atlético de Madrid','Bayern Múnich',
   'Borussia Dortmund','Manchester City','Manchester United','Liverpool','Arsenal','Chelsea','Tottenham Hotspur','Paris Saint-Germain','Juventus',
   'Inter','AC Milan','Napoli','Benfica','Porto','Sporting CP','Ajax','Flamengo','Palmeiras']);
-const FILTROS = [['todos','Con foto'], ['tops','Tops'], ['ley','Leyendas'], ['troll','Trolls'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
-function pasa(j, f){
-  if (filtro === 'marcadas') return !!marca(j, f);
-  if (filtro === 'troll') return !!j.troll;
-  if (filtro === 'tops') return !j.troll && GRANDES.has(j.club);
-  if (filtro === 'nada') return f.tipo === 'nada';
-  if (f.tipo === 'nada') return false;
-  if (filtro === 'ley') return j.ley;
-  if (filtro === 'tsdb' || filtro === 'commons') return f.tipo === filtro;
+// Dos filtros que se combinan: qué jugadores (grupo) y qué pasa con su foto
+const GRUPOS = [['todos','Todos'], ['tops','Tops'], ['actuales','Actuales'], ['ley','Leyendas'], ['troll','Trolls'], ['marcadas','Marcadas']];
+const FOTOS = [['todas','Todas'], ['con','Con foto'], ['sin','Sin foto'], ['tsdb','TheSportsDB'], ['commons','Commons']];
+function enGrupo(j, f, g){
+  if (g === 'tops') return !j.troll && GRANDES.has(j.club);
+  if (g === 'actuales') return !j.troll && !j.ley;
+  if (g === 'ley') return !!j.ley;
+  if (g === 'troll') return !!j.troll;
+  if (g === 'marcadas') return !!marca(j, f);
   return true;
 }
+function conFoto(f, x){
+  if (x === 'con') return f.tipo !== 'nada';
+  if (x === 'sin') return f.tipo === 'nada';
+  if (x === 'tsdb' || x === 'commons') return f.tipo === x;
+  return true;
+}
+const pasa = (j, f) => enGrupo(j, f, grupo) && conFoto(f, foto);
+try { const g = JSON.parse(localStorage.getItem('subasta-revision-filtros') || '{}'); if (g.grupo) grupo = g.grupo; if (g.foto) foto = g.foto; } catch(e){}
 function lista(){
   const nq = norm(q.trim());
   return J.map(j => [j, fuente(j)]).filter(([j, f]) => pasa(j, f) && (!nq || norm(j.n).includes(nq)));
 }
 function chips(){
-  const n = {}; J.forEach(j => { const f = fuente(j);
-    FILTROS.forEach(([id]) => { const old = filtro; filtro = id; if (pasa(j, f)) n[id] = (n[id] || 0) + 1; filtro = old; }); });
-  document.getElementById('chips').innerHTML = FILTROS.map(([id, l]) =>
-    `<button class="chip" data-f="${id}" aria-pressed="${filtro === id}">${l}<span>${(n[id] || 0).toLocaleString('es-AR')}</span></button>`).join('');
+  const ng = {}, nf = {};
+  J.forEach(j => { const f = fuente(j);
+    GRUPOS.forEach(([g]) => { if (enGrupo(j, f, g) && conFoto(f, foto)) ng[g] = (ng[g] || 0) + 1; });
+    if (enGrupo(j, f, grupo)) FOTOS.forEach(([x]) => { if (conFoto(f, x)) nf[x] = (nf[x] || 0) + 1; }); });
+  const fila = (lista, n, act, tipo) => lista.map(([id, l]) =>
+    `<button class="chip" data-${tipo}="${id}" aria-pressed="${act === id}">${l}<span>${(n[id] || 0).toLocaleString('es-AR')}</span></button>`).join('');
+  document.getElementById('chips').innerHTML = fila(GRUPOS, ng, grupo, 'g');
+  document.getElementById('fotos').innerHTML = fila(FOTOS, nf, foto, 'x');
+  try { localStorage.setItem('subasta-revision-filtros', JSON.stringify({grupo, foto})); } catch(e){}
 }
 function ficha(j, f){
   const m = marca(j, f) || {};
@@ -275,7 +293,7 @@ function cambiar(card, cambio){
 }
 document.addEventListener('click', e => {
   const c = e.target.closest('.chip');
-  if (c){ filtro = c.dataset.f; pagina = 1; pintar(); return; }
+  if (c){ if (c.dataset.g) grupo = c.dataset.g; else foto = c.dataset.x; pagina = 1; pintar(); return; }
   if (e.target.id === 'more'){ pagina++; pintar(); return; }
   if (e.target.id === 'sync'){ leerProceso().then(leerHoja); return; }
   const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
