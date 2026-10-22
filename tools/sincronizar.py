@@ -10,6 +10,8 @@ Las correcciones a mano que haya en tools/revision-manual.json se suman.
 También toma los jugadores agregados desde la página (accion = "alta", valor = {tipo, n, p, nat, by, club, lg, v,
 precio, foto, baja, t}): los guarda en tools/altas.json (en orden de alta, nunca se borran: una baja queda marcada)
 y los suma a tools/jugadores.json para que los procesos les busquen foto. Si trajeron link de foto, va primero.
+Y las ediciones (accion = "edita", valor = {n, p, nat, by, club, v, precio, oculto, t}): vale la más nueva de cada
+jugador; quedan en tools/ediciones.json (el juego las aplica al abrir) y se aplican también a tools/jugadores.json.
 Escribe los archivos solo si cambiaron; imprime "cambio N" o "igual", y "altas" si cambió la lista de agregados.
 """
 import csv, io, json, os, sys, urllib.request
@@ -139,8 +141,63 @@ def altas(txt):
     return lista, cambio
 
 
-def jugadores_con_altas(lista):
-    """Suma (o saca, si se dieron de baja) los agregados en tools/jugadores.json."""
+def ediciones(txt):
+    """Última edición de cada jugador según el CSV, sumada a tools/ediciones.json. Devuelve el diccionario."""
+    p = os.path.join(AQUI, 'ediciones.json')
+    ed = leer(p, {})
+    antes = json.dumps(ed, sort_keys=True)
+    for f in csv.DictReader(io.StringIO(txt)):
+        k = texto(f.get('clave'), 80)
+        if f.get('accion') != 'edita' or not k:
+            continue
+        try:
+            v = json.loads(f.get('valor') or '')
+            t = float(v['t'])
+        except Exception:
+            continue
+        if k in ed and ed[k].get('t', 0) >= t:
+            continue
+        e = {'t': t, 'quien': texto(f.get('revisor'), 40), 'oculto': bool(v.get('oculto'))}
+        if texto(v.get('n')):
+            e['n'] = texto(v.get('n'))
+        if v.get('p') in PUESTOS:
+            e['p'] = v['p']
+        if 'nat' in v:
+            e['nat'] = texto(v.get('nat'), 40)
+        if 'club' in v:
+            e['club'] = texto(v.get('club'), 50)
+        by = num(v.get('by'), 1850, 2015)
+        if by:
+            e['by'] = int(by)
+        for campo, hi in (('v', 300), ('precio', 300)):
+            x = num(v.get(campo), 0, hi)
+            if x is not None:
+                e[campo] = x
+        ed[k] = e
+    if json.dumps(ed, sort_keys=True) != antes:
+        json.dump(ed, open(p, 'w'), ensure_ascii=False, indent=1, sort_keys=True)
+    return ed
+
+
+def aplicar_edicion(j, e):
+    """Entrada de jugadores.json con una edición aplicada (también la usa el armado del juego)."""
+    j = dict(j)
+    for campo in ('n', 'p', 'nat', 'by', 'club'):
+        if campo in e:
+            j[campo] = e[campo]
+    if 'v' in e and not j.get('troll'):
+        j['v'] = e['v']
+    if 'precio' in e and j.get('troll'):
+        j['precio'] = e['precio']
+    if e.get('oculto'):
+        j['oculto'] = 1
+    else:
+        j.pop('oculto', None)
+    return j
+
+
+def jugadores_con_altas(lista, ed=None):
+    """Suma (o saca, si se dieron de baja) los agregados en tools/jugadores.json, y aplica las ediciones."""
     p = os.path.join(AQUI, 'jugadores.json')
     jug = leer(p, [])
     antes = json.dumps(jug)
@@ -152,14 +209,17 @@ def jugadores_con_altas(lista):
             continue
         e = {'k': a['k'], 'n': a['n'], 'by': a.get('by'), 'img': '', 'v': 0.5 if a['tipo'] == 'troll' else a.get('v') or 1,
              'ley': 1 if a['tipo'] == 'leyenda' else 0, 'lg': {'leyenda': 'LEY', 'troll': 'TRL'}.get(a['tipo'], a.get('lg') or 'ARG1'),
-             'club': a.get('club') or '', 'alta': 1}
+             'club': a.get('club') or '', 'alta': 1, 'p': a['p'], 'nat': a.get('nat') or ''}
         if a['tipo'] == 'troll':
             e['troll'] = 1
+            e['precio'] = a.get('precio') or 40
         if a['k'] in por_k:
             jug[por_k[a['k']]] = e
         else:
             por_k[a['k']] = len(jug)
             jug.append(e)
+    if ed:
+        jug = [aplicar_edicion(j, ed[j['k']]) if j['k'] in ed else j for j in jug]
     if json.dumps(jug) != antes:
         json.dump(jug, open(p, 'w'), ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     return jug
@@ -181,7 +241,8 @@ def main():
         return
     txt = open(sys.argv[1]).read() if len(sys.argv) > 1 else bajar()
     lista, cambio_altas = altas(txt)
-    claves = {j['k'] for j in jugadores_con_altas(lista)}
+    ed = ediciones(txt)
+    claves = {j['k'] for j in jugadores_con_altas(lista, ed)}
     # a los agregados se les busca foto (con el link que trajeron, si trajeron)
     extra = {a['k']: ({'url': a['foto']} if a.get('foto') else {}) for a in lista if not a.get('baja')}
     extra = sumar(extra, leer(os.path.join(AQUI, 'revision-manual.json'), {}))

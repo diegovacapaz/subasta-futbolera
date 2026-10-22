@@ -40,7 +40,7 @@ jobs:
             git pull -q --rebase -X theirs origin main || true
             R=$(python3 tools/sincronizar.py || echo error)
             echo "::notice::$(date -u +%H:%M) $R"
-            git add tools/revision.json tools/altas.json tools/jugadores.json 2>/dev/null || git add tools/revision.json
+            git add tools/revision.json tools/altas.json tools/ediciones.json tools/jugadores.json
             if ! git diff --cached --quiet; then
               git commit -q -m "Revisión: marcas y jugadores agregados por los revisores"
               for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done

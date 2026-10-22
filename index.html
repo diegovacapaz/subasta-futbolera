@@ -328,14 +328,37 @@ function filaAlta(a){
   return [a.n, a.p, a.nat || '', a.by || null, a.club || '—', a.lg || 'ARG1', a.v || 1, '', a.n, '', 0, a.k];
 }
 function sumarAltas(lista){
-  if (!Array.isArray(lista)) return false;
-  let cambio = false;
-  lista.forEach((a, i) => { if (!a || !a.k || !a.n || !a.p) return;
-    const fila = filaAlta(a), j = D_BASE + i;
-    if (JSON.stringify(D[j]) !== JSON.stringify(fila)){ D[j] = fila; cambio = true; } });
-  return cambio;
+  if (!Array.isArray(lista)) return;
+  lista.forEach((a, i) => { if (a && a.k && a.n && a.p) D[D_BASE + i] = filaAlta(a); });
 }
-try { sumarAltas(JSON.parse(localStorage.getItem(ALTAS_KEY) || '[]')); } catch(e){}
+// Ediciones hechas desde la página de revisión (tools/ediciones.json): {clave: {n, p, nat, by, club, v, precio, oculto}}
+const ED_KEY = 'remate-futbolero-ediciones', ORIG = {};
+const claveFila = d => d ? (d[7] ? 'tm' + d[7].split('-')[0] : (d[11] || '')) : '';
+function aplicarEdiciones(ed){
+  if (!ed || typeof ed !== 'object') return;
+  const idx = {}; D.forEach((d, i) => { const k = claveFila(d); if (k && ed[k]) idx[k] = i; });
+  for (const [k, e] of Object.entries(ed)){
+    const i = idx[k]; if (i === undefined || !e) continue;
+    ORIG[i] = D[i]; const d = D[i].slice(), trl = d[5] === 'TRL';
+    if (e.n){ d[0] = e.n; d[8] = trl ? (e.n.replace(/\s*\(.*?\)/g, '') || e.n) : e.n; }
+    if (e.p && POS[e.p]) d[1] = e.p;
+    if (typeof e.nat === 'string') d[2] = e.nat;
+    if (e.by && !trl) d[3] = e.by;
+    if (e.club && !trl) d[4] = e.club;
+    if (typeof e.v === 'number' && !trl) d[6] = e.v;
+    if (typeof e.precio === 'number' && trl) d[12] = e.precio;
+    if (e.oculto) d[5] = 'BAJA';
+    D[i] = d;
+  }
+}
+let ALTAS_L = [], ED_L = {};
+try { ALTAS_L = JSON.parse(localStorage.getItem(ALTAS_KEY) || '[]'); } catch(e){}
+try { ED_L = JSON.parse(localStorage.getItem(ED_KEY) || '{}'); } catch(e){}
+// Arma D con los agregados y las ediciones (se rehace cada vez que llegan datos nuevos)
+function recalcularDatos(){
+  for (const i of Object.keys(ORIG)){ D[i] = ORIG[i]; delete ORIG[i]; }
+  sumarAltas(ALTAS_L); aplicarEdiciones(ED_L);
+}
 const TM_IMG = 'https://img.a.transfermarkt.technology/portrait/header/';
 
 const LEAGUES = {GB1:'Premier League',ES1:'LaLiga',IT1:'Serie A',L1:'Bundesliga',FR1:'Ligue 1',ARG1:'Liga Argentina',BRA1:'Brasileirão',
@@ -495,10 +518,16 @@ function cutUrl(id){
 const bigTM = u => u.replace('/portrait/header/', '/portrait/big/');
 let FOTOS = {};
 function loadFotos(){
-  try { fetch(ASSET + 'tools/altas.json', {cache: 'no-cache'}).then(r => r.ok ? r.json() : null).then(l => {
-    if (!Array.isArray(l)) return;
-    try { localStorage.setItem(ALTAS_KEY, JSON.stringify(l)); } catch(e){}
-    if (sumarAltas(l) && S) render(); }).catch(() => {}); } catch(e){}
+  try {
+    const j = u => fetch(ASSET + u, {cache: 'no-cache'}).then(r => r.ok ? r.json() : null).catch(() => null);
+    Promise.all([j('tools/altas.json'), j('tools/ediciones.json')]).then(([l, ed]) => {
+      const antes = JSON.stringify([ALTAS_L, ED_L]);
+      if (Array.isArray(l)) ALTAS_L = l;
+      if (ed && typeof ed === 'object') ED_L = ed;
+      if (JSON.stringify([ALTAS_L, ED_L]) === antes) return;
+      try { localStorage.setItem(ALTAS_KEY, JSON.stringify(ALTAS_L)); localStorage.setItem(ED_KEY, JSON.stringify(ED_L)); } catch(e){}
+      recalcularDatos(); if (S) render(); });
+  } catch(e){}
   try { fetch(ASSET + 'sil/fotos.json').then(r => r.ok ? r.json() : {}).then(j => { FOTOS = j || {}; }).catch(() => {}); } catch(e){}
   try { fetch(ASSET + 'tsdb/indice.json').then(r => r.ok ? r.json() : {}).then(j => { TSDB = j || {}; if (S && S.phase !== 'setup') render(); }).catch(() => {}); } catch(e){}
   // Commons se procesa en 4 partes (indice-0..3.json); si todavía no hay partes, se usa el índice común.
@@ -1602,6 +1631,7 @@ function phoneMain(code){
   connect();
 }
 
+try { recalcularDatos(); } catch(e){}
 if (MESA) phoneMain(MESA);
 else {
 S = load() || fresh();
