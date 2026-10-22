@@ -363,8 +363,12 @@ form.addEventListener('submit', e => {
   if (!n){ msg.innerHTML = '<span class="aviso">Falta el nombre.</span>'; return; }
   if (t !== 'troll' && by && (by < 1850 || by > 2015)){ msg.innerHTML = '<span class="aviso">El año de nacimiento no parece correcto.</span>'; return; }
   if (fotoUrl && !/^https?:\/\/\S+$/.test(foto)){ msg.innerHTML = '<span class="aviso">El link de la foto tiene que empezar con https://</span>'; return; }
-  const base = norm(n.replace(/\s*\(.*?\)/g, ''));
-  const igual = J.find(j => norm(j.n.replace(/\s*\(.*?\)/g, '')) === base && (!by || !j.by || j.by === by) && !!j.troll === (t === 'troll'));
+  // Ya existe si es el mismo nombre, o si uno contiene al otro (Labruna / Ángel Labruna) y nacieron el mismo año
+  const limpio = x => ' ' + norm(x.replace(/\s*\(.*?\)/g, '')).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const base = limpio(n);
+  const igual = J.find(j => { const o = limpio(j.n);
+    if (o === base) return !by || !j.by || j.by === by;
+    return by && j.by === by && (o.includes(base) || base.includes(o)); });
   if (igual){ msg.innerHTML = `<span class="aviso">Ya está en el juego: ${esc(igual.n)}${igual.by ? ' (' + igual.by + ')' : ''}. Buscalo con el buscador.</span>`; return; }
   const a = {k: 'a-' + slug(n) + (by ? '-' + by : ''), tipo: t, n, p: form.p.value, nat: form.nat.value.trim(), by,
              club: t === 'troll' ? '' : form.club.value.trim(), lg: t === 'actual' ? form.lg.value : '',
