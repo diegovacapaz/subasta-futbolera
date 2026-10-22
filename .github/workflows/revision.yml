@@ -40,10 +40,15 @@ jobs:
             git pull -q --rebase -X theirs origin main || true
             R=$(python3 tools/sincronizar.py || echo error)
             echo "::notice::$(date -u +%H:%M) $R"
-            git add tools/revision.json
+            git add tools/revision.json tools/altas.json tools/jugadores.json 2>/dev/null || git add tools/revision.json
             if ! git diff --cached --quiet; then
-              git commit -q -m "Revisión: marcas de los revisores ($(echo "$R" | cut -d' ' -f2) jugadores)"
+              git commit -q -m "Revisión: marcas y jugadores agregados por los revisores"
               for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin main && break; sleep 10; done
+            fi
+            # jugadores nuevos: que TheSportsDB los busque (y después lanza Commons)
+            if echo "$R" | grep -q altas; then
+              ACTIVAS=$(gh run list --workflow tsdb.yml --limit 5 --json status -q '[.[] | select(.status != "completed")] | length' || echo 1)
+              [ "$ACTIVAS" = "0" ] && gh workflow run tsdb.yml --ref main -f minutos=30 || true
             fi
             # que Commons rehaga las fichas marcadas que falten (si ya está corriendo, las toma en su próxima vuelta)
             PEND=$(python3 tools/sincronizar.py --pendientes || echo 0)

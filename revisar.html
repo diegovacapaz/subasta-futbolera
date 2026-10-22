@@ -74,6 +74,14 @@ textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;fo
 .nota:empty{display:none}
 .yo{flex:0 1 200px}
 .yo.falta{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+.alta{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 16px;display:grid;gap:10px}
+.alta h2{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:24px;margin:0}
+.campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.campos label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+.campos .ancho{grid-column:span 2}
+@media (max-width:420px){ .campos .ancho{grid-column:auto} }
+select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+.quitar{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:600;color:var(--muted)}
 .aviso{font-size:13px;font-weight:600;color:var(--bad);margin:0}
 </style>
 </head>
@@ -86,7 +94,27 @@ textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;fo
     <div class="chips" id="chips" role="group" aria-label="Jugadores"></div>
     <div class="chips seg" id="fotos" role="group" aria-label="Foto"></div>
     <input class="search" id="q" type="search" placeholder="Buscar jugador" aria-label="Buscar jugador" autocomplete="off">
+    <button class="ghost" id="nuevo" aria-expanded="false" aria-controls="alta">+ Agregar jugador</button>
   </div>
+  <form id="alta" class="alta" hidden>
+    <h2>Agregar jugador</h2>
+    <div class="campos">
+      <label>Tipo<select name="tipo"><option value="leyenda">Leyenda</option><option value="troll">Troll</option><option value="actual">Actual</option></select></label>
+      <label class="ancho">Nombre<input name="n" required maxlength="60" placeholder="Como querés que aparezca en el juego"></label>
+      <label>Posición<select name="p">
+        <option value="ARQ">Arquero</option><option value="LD">Lateral derecho</option><option value="DFC">Central</option><option value="LI">Lateral izquierdo</option>
+        <option value="MC">Volante</option><option value="ED">Extremo derecho</option><option value="EI">Extremo izquierdo</option><option value="DC">Centrodelantero</option></select></label>
+      <label>Nacionalidad<input name="nat" maxlength="40" placeholder="Argentina"></label>
+      <label data-solo="leyenda actual">Año de nacimiento<input name="by" type="number" min="1850" max="2015" inputmode="numeric"></label>
+      <label data-solo="leyenda actual">Club<input name="club" maxlength="50" placeholder="Club por el que se lo recuerda"></label>
+      <label data-solo="actual">Liga<select name="lg"></select></label>
+      <label data-solo="leyenda actual">Valor (millones)<input name="v" type="number" min="0" max="300" step="0.5" value="40"></label>
+      <label data-solo="troll">Precio trampa (millones)<input name="precio" type="number" min="1" max="300" value="45"></label>
+      <label class="ancho">Link a una foto (opcional)<input name="foto" type="url" placeholder="Si no ponés, se busca sola"></label>
+    </div>
+    <p class="note" id="altamsg"></p>
+    <div class="row"><button class="primary" type="submit">Agregar</button><button class="ghost" type="button" id="altacancel">Cancelar</button></div>
+  </form>
   <div id="list"><p class="status">Cargando jugadores…</p></div>
 </div>
 <div class="foot"><div class="foot-in">
@@ -105,6 +133,12 @@ const leerLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || ''
 const grabarLS = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch(e){} };
 let mias = leerLS(KEY, {});        // marcas hechas en este navegador: {clave: {id, mal, recorte, url, t, quien, enviada}}
 let todas = {};                    // última marca de cada ficha según la hoja compartida
+let altasHoja = {};                // jugadores agregados por los revisores, según la hoja
+let misAltas = leerLS('subasta-altas', {});   // agregados desde este navegador que todavía no figuran en la hoja
+const LIGAS = {ARG1:'Liga Argentina',GB1:'Premier League',ES1:'LaLiga',IT1:'Serie A',L1:'Bundesliga',FR1:'Ligue 1',BRA1:'Brasileirão',PO1:'Portugal',
+  NL1:'Eredivisie',TR1:'Turquía',SA1:'Arabia Saudita',MLS1:'MLS',MEX1:'Liga MX',COL1:'Colombia',BE1:'Bélgica',SC1:'Escocia',GR1:'Grecia',RU1:'Rusia',
+  UKR1:'Ucrania',A1:'Austria',C1:'Suiza',DK1:'Dinamarca',KR1:'Croacia',PL1:'Polonia',RO1:'Rumania',SER1:'Serbia',TS1:'Chequia',SE1:'Suecia',
+  NO1:'Noruega',JAP1:'Japón',RSK1:'Corea del Sur',AUS1:'Australia'};
 let yo = ''; try { yo = localStorage.getItem(KEY_YO) || ''; } catch(e){}
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -159,13 +193,14 @@ const GRANDES = new Set(['River Plate','Boca Juniors','Racing Club','Independien
   'Borussia Dortmund','Manchester City','Manchester United','Liverpool','Arsenal','Chelsea','Tottenham Hotspur','Paris Saint-Germain','Juventus',
   'Inter','AC Milan','Napoli','Benfica','Porto','Sporting CP','Ajax','Flamengo','Palmeiras']);
 // Dos filtros que se combinan: qué jugadores (grupo) y qué pasa con su foto
-const GRUPOS = [['todos','Todos'], ['tops','Tops'], ['actuales','Actuales'], ['ley','Leyendas'], ['troll','Trolls'], ['marcadas','Marcadas']];
+const GRUPOS = [['todos','Todos'], ['tops','Tops'], ['actuales','Actuales'], ['ley','Leyendas'], ['troll','Trolls'], ['alta','Agregados'], ['marcadas','Marcadas']];
 const FOTOS = [['todas','Todas'], ['con','Con foto'], ['sin','Sin foto'], ['tsdb','TheSportsDB'], ['commons','Commons']];
 function enGrupo(j, f, g){
   if (g === 'tops') return !j.troll && GRANDES.has(j.club);
   if (g === 'actuales') return !j.troll && !j.ley;
   if (g === 'ley') return !!j.ley;
   if (g === 'troll') return !!j.troll;
+  if (g === 'alta') return !!j.alta;
   if (g === 'marcadas') return !!marca(j, f);
   return true;
 }
@@ -204,6 +239,7 @@ function ficha(j, f){
         <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por otra foto' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
       <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
       <div class="nota">${nota(j, f)}</div>
+      ${j.alta ? `<div class="meta"><span>${j.nuevo ? 'Recién agregado: en unos minutos entra al juego y se le busca foto' : 'Agregado desde esta página'}</span><button class="quitar" data-quitar="${j.k}">Quitar</button></div>` : ''}
     </div></article>`;
 }
 function pintar(){
@@ -248,14 +284,28 @@ async function leerHoja(){
   catch(e){ pie('No se pudieron leer las marcas de los demás. Las tuyas igual se envían.'); return; }
   const filas = parseCSV(txt), cab = filas.shift() || [], col = n => cab.indexOf(n);
   const ck = col('clave'), ca = col('accion'), cv = col('valor'), cr = col('revisor'), nuevas = {};
+  const hoja = {};
   for (const f of filas){
+    if (f[ca] === 'alta' && f[ck]){
+      let a; try { a = JSON.parse(f[cv]); } catch(e){ continue; }
+      if (!a || typeof a.t !== 'number') continue;
+      a.k = f[ck]; a.quien = (f[cr] || '').trim();
+      if (!hoja[a.k] || a.t >= hoja[a.k].t) hoja[a.k] = a;
+      continue;
+    }
     if (f[ca] !== 'marca' || !f[ck]) continue;
     let v; try { v = JSON.parse(f[cv]); } catch(e){ continue; }
     if (typeof v !== 'object' || !v || typeof v.t !== 'number') continue;
     v.quien = (f[cr] || '').trim();
     if (!nuevas[f[ck]] || v.t >= nuevas[f[ck]].t) nuevas[f[ck]] = v;
   }
-  todas = nuevas;
+  todas = nuevas; altasHoja = hoja;
+  for (const [k, a] of Object.entries(misAltas)){
+    if (altasHoja[k] && altasHoja[k].t >= a.t) delete misAltas[k];
+    else if (!a.enviada || Date.now() - a.enviada > 15 * 60 * 1000) enviarAlta(a);
+  }
+  grabarLS('subasta-altas', misAltas);
+  mezclarAltas();
   // Las mías que ya figuran en la hoja se olvidan; las que no llegaron después de 15 minutos se vuelven a mandar
   for (const [k, m] of Object.entries(mias)){
     if (todas[k] && todas[k].t >= m.t) delete mias[k];
@@ -267,12 +317,82 @@ async function leerHoja(){
   pie();
 }
 
+// --- Jugadores agregados ---
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function altaAJug(a){
+  return {k: a.k, n: a.n, by: a.by || null, img: '', v: a.tipo === 'troll' ? 0.5 : (+a.v || 1), ley: a.tipo === 'leyenda' ? 1 : 0,
+          troll: a.tipo === 'troll' ? 1 : 0, lg: a.tipo === 'leyenda' ? 'LEY' : a.tipo === 'troll' ? 'TRL' : (a.lg || 'ARG1'),
+          club: a.club || '', alta: 1, nuevo: true};
+}
+// Suma a la lista los agregados que el proceso todavía no pasó a jugadores.json, y saca los que se dieron de baja
+function mezclarAltas(){
+  const ult = {...altasHoja};
+  for (const [k, a] of Object.entries(misAltas)) if (!ult[k] || a.t > ult[k].t) ult[k] = a;
+  for (const a of Object.values(ult)){
+    const i = J.findIndex(j => j.k === a.k);
+    if (a.baja){ if (i >= 0) J.splice(i, 1); }
+    else if (i < 0) J.push(altaAJug(a));
+  }
+}
+function enviarAlta(a){
+  if (!yo) return;
+  const {k, enviada, quien, ...valor} = a;
+  const body = new URLSearchParams({[ENTRY.clave]: k, [ENTRY.accion]: 'alta', [ENTRY.revisor]: yo, [ENTRY.valor]: JSON.stringify(valor)});
+  fetch(FORM, {method: 'POST', mode: 'no-cors', body})
+    .then(() => { if (misAltas[k] && misAltas[k].t === a.t){ misAltas[k].enviada = Date.now(); grabarLS('subasta-altas', misAltas); } })
+    .catch(() => pie('No se pudo enviar (¿sin conexión?). Se reintenta al tocar Actualizar.'));
+}
+const form = document.getElementById('alta');
+form.lg.innerHTML = Object.entries(LIGAS).map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
+function tipoAlta(){
+  const t = form.tipo.value;
+  form.querySelectorAll('[data-solo]').forEach(l => { l.hidden = !l.dataset.solo.split(' ').includes(t); });
+}
+form.tipo.addEventListener('change', tipoAlta); tipoAlta();
+function abrirAlta(abrir){
+  form.hidden = !abrir; document.getElementById('nuevo').setAttribute('aria-expanded', String(abrir));
+  document.getElementById('altamsg').textContent = '';
+  if (abrir){ if (!yo){ form.hidden = true; document.getElementById('nuevo').setAttribute('aria-expanded', 'false'); return pedirNombre(); } form.n.focus(); }
+}
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const msg = document.getElementById('altamsg');
+  if (!yo) return pedirNombre();
+  const t = form.tipo.value, n = form.n.value.replace(/\s+/g, ' ').trim(), by = t === 'troll' ? null : (+form.by.value || null);
+  const fotoUrl = form.foto.value.trim();
+  if (!n){ msg.innerHTML = '<span class="aviso">Falta el nombre.</span>'; return; }
+  if (t !== 'troll' && by && (by < 1850 || by > 2015)){ msg.innerHTML = '<span class="aviso">El año de nacimiento no parece correcto.</span>'; return; }
+  if (fotoUrl && !/^https?:\/\/\S+$/.test(foto)){ msg.innerHTML = '<span class="aviso">El link de la foto tiene que empezar con https://</span>'; return; }
+  const base = norm(n.replace(/\s*\(.*?\)/g, ''));
+  const igual = J.find(j => norm(j.n.replace(/\s*\(.*?\)/g, '')) === base && (!by || !j.by || j.by === by) && !!j.troll === (t === 'troll'));
+  if (igual){ msg.innerHTML = `<span class="aviso">Ya está en el juego: ${esc(igual.n)}${igual.by ? ' (' + igual.by + ')' : ''}. Buscalo con el buscador.</span>`; return; }
+  const a = {k: 'a-' + slug(n) + (by ? '-' + by : ''), tipo: t, n, p: form.p.value, nat: form.nat.value.trim(), by,
+             club: t === 'troll' ? '' : form.club.value.trim(), lg: t === 'actual' ? form.lg.value : '',
+             v: t === 'troll' ? null : (+form.v.value || 1), precio: t === 'troll' ? (+form.precio.value || 40) : null, foto: fotoUrl, baja: false, t: Date.now()};
+  misAltas[a.k] = a; grabarLS('subasta-altas', misAltas); enviarAlta(a);
+  mezclarAltas();
+  form.reset(); tipoAlta(); abrirAlta(false);
+  grupo = 'alta'; foto = 'todas'; pagina = 1; q = ''; document.getElementById('q').value = '';
+  pintar(); pie(`<b>${esc(n)}</b> agregado. En unos minutos entra al juego y se le busca foto.`);
+});
+document.getElementById('altacancel').addEventListener('click', () => abrirAlta(false));
+document.getElementById('nuevo').addEventListener('click', () => abrirAlta(form.hidden));
+function quitar(k){
+  const j = J.find(x => x.k === k); if (!j) return;
+  const a = misAltas[k] || altasHoja[k] || {};
+  const baja = {...a, k, tipo: j.troll ? 'troll' : j.ley ? 'leyenda' : 'actual', n: a.n || j.n, p: a.p || 'MC', baja: true, t: Date.now()};
+  delete baja.enviada; delete baja.quien;
+  misAltas[k] = baja; grabarLS('subasta-altas', misAltas); enviarAlta(baja);
+  mezclarAltas(); pintar(); pie(`<b>${esc(j.n)}</b> quitado del juego.`);
+}
+
 // --- Interacción ---
 const yoInput = document.getElementById('yo');
 yoInput.value = yo;
 yoInput.addEventListener('change', () => {
   yo = yoInput.value.trim(); grabarLS(KEY_YO, yo); yoInput.classList.toggle('falta', !yo);
   if (yo) Object.keys(mias).forEach(k => { if (!mias[k].enviada) enviar(k); });
+  if (yo) Object.values(misAltas).forEach(a => { if (!a.enviada) enviarAlta(a); });
   pintar(); pie();
 });
 function pedirNombre(){
@@ -296,6 +416,13 @@ document.addEventListener('click', e => {
   if (c){ if (c.dataset.g) grupo = c.dataset.g; else foto = c.dataset.x; pagina = 1; pintar(); return; }
   if (e.target.id === 'more'){ pagina++; pintar(); return; }
   if (e.target.id === 'sync'){ leerProceso().then(leerHoja); return; }
+  const qb = e.target.closest('[data-quitar]');
+  if (qb){
+    if (!yo) return pedirNombre();
+    if (qb.dataset.ok){ quitar(qb.dataset.quitar); return; }
+    qb.dataset.ok = '1'; qb.textContent = '¿Seguro? Tocá de nuevo'; setTimeout(() => { if (qb.isConnected){ delete qb.dataset.ok; qb.textContent = 'Quitar'; } }, 4000);
+    return;
+  }
   const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
   if (b){
     if (!yo) return pedirNombre();
@@ -327,7 +454,7 @@ const leerProceso = () => Promise.all([fetchJ('tsdb/indice.json', TS), comIndice
   .then(([t, c, rv, fa, rev]) => { TS = t; CO = c; RV = rv; FA = fa; REV = rev; });
 Promise.all([fetchJ('tools/jugadores.json', []), leerProceso()])
   .then(([j]) => {
-    J = j; listo = true;
+    J = j; listo = true; mezclarAltas();
     // Marcas de la versión anterior de esta página (guardadas solo en este navegador): se pasan a la hoja compartida
     const viejas = leerLS(KEY_VIEJA, {});
     for (const [k, m] of Object.entries(viejas)){
