@@ -66,6 +66,8 @@ input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid v
 textarea{width:100%;min-height:120px;font-family:ui-monospace,Menlo,monospace;font-size:12px;margin-top:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
 .status{color:var(--muted);padding:40px 0;text-align:center}
 .who{font-size:12px;font-weight:600;color:var(--bad)}
+.ok{font-size:12px;font-weight:600;color:var(--accent)}
+.nota:empty{display:none}
 .yo{flex:0 1 200px}
 .yo.falta{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
 .aviso{font-size:13px;font-weight:600;color:var(--bad);margin:0}
@@ -93,7 +95,7 @@ const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSc_ze1VE8cRkpEAdbEj3dt8Ew
 const ENTRY = {clave: 'entry.106100299', accion: 'entry.240074220', valor: 'entry.1169776155', revisor: 'entry.1246452984'};
 const CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8SOBIPVzFFUOIEp7LPiOu76u5JYCZ5XD8Gsn-CN_ps-TV7-ziAKmKbTv8CMYZgGrAmy4iMNN7sMqG/pub?gid=1439134911&single=true&output=csv';
 const KEY = 'subasta-revision-2', KEY_VIEJA = 'subasta-revision', KEY_YO = 'subasta-revisor';
-let J = [], TS = {}, CO = {}, filtro = 'todos', q = '', pagina = 1, listo = false;
+let J = [], TS = {}, CO = {}, RV = {}, FA = {}, REV = {}, filtro = 'todos', q = '', pagina = 1, listo = false;
 const leerLS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch(e){ return d; } };
 const grabarLS = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch(e){} };
 let mias = leerLS(KEY, {});        // marcas hechas en este navegador: {clave: {id, mal, recorte, url, t, quien, enviada}}
@@ -104,22 +106,47 @@ const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fetchJ = (u, def) => fetch(u, {cache:'no-cache'}).then(r => r.ok ? r.json() : def).catch(() => def);
 
 // Fuente actual de la ficha: TheSportsDB, Commons, o nada de medio cuerpo
+const hash = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
 function fuente(j){
-  const c = CO[j.k] || '', veto = c[0] === '!', com = c.replace(/^!/, '');
+  const c = CO[j.k] || '', veto = c[0] === '!', com = c.replace(/^!/, ''), v = '?v=' + hash(c + '|' + (RV[j.k] || ''));
   if (!veto && (TS[j.k] || '').includes('m')) return {tipo:'tsdb', id:'tsdb', f:`tsdb/f/${j.k}.webp`, m:`tsdb/m/${j.k}.png`};
   if (com){
     const t = com.startsWith('https://commons.wikimedia.org/wiki/') ? decodeURIComponent(com.split('/wiki/')[1]).replace(/_/g, ' ') : com;
-    return {tipo:'commons', id:t, link:com, f:`commons/f/${j.k}.webp`, m:`commons/m/${j.k}.png`};
+    return {tipo:'commons', id:t, link:com, f:`commons/f/${j.k}.webp${v}`, m:`commons/m/${j.k}.png${v}`};
   }
   return {tipo:'nada', id:'', f:'', m:''};
 }
 // Marca vigente de una ficha: la más nueva entre la hoja y este navegador. Mal/recorte valen solo para la foto que se juzgó.
 function marca(j, f){
-  const a = todas[j.k], b = mias[j.k], m = !a ? b : !b ? a : (b.t > a.t ? b : a);
+  const m = ultima(j.k);
   if (!m) return null;
   const misma = (m.id || '') === f.id;
-  const r = {mal: misma && !!m.mal, recorte: misma && !!m.recorte, url: m.url || '', quien: m.quien || ''};
+  const r = {mal: misma && !!m.mal, recorte: misma && !!m.recorte, url: m.url || '', quien: m.quien || '', hecha: aplicada(j.k, m)};
   return r.mal || r.recorte || r.url ? r : null;
+}
+// Igual que json.dumps(x, sort_keys=True) de Python: así se compara con la firma que guarda el proceso al aplicar
+function pyDumps(x){
+  if (Array.isArray(x)) return '[' + x.map(pyDumps).join(', ') + ']';
+  if (x && typeof x === 'object') return '{' + Object.keys(x).sort().map(k => pyDumps(k) + ': ' + pyDumps(x[k])).join(', ') + '}';
+  return JSON.stringify(x).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
+// Última marca de la ficha (de quien sea) y si el proceso ya la aplicó
+function ultima(k){ const a = todas[k], b = mias[k]; return !a ? b : !b ? a : (b.t > a.t ? b : a); }
+function aplicada(k, m){
+  const r = REV[k]; if (!m || !r) return false;
+  const no = r.no || [], rec = r.recortar || [];
+  const pide = (!m.mal || no.includes(m.id)) && (!m.recorte || (m.id === 'tsdb' ? no.includes('tsdb') : rec.includes(m.id))) && (!m.url || r.url === m.url);
+  return pide && RV[k] === pyDumps(r);
+}
+function nota(j, f){
+  const m = ultima(j.k); if (!m || !(m.mal || m.recorte || m.url)) return '';
+  const por = m.quien ? ` (${m.quien === yo ? 'vos' : esc(m.quien)})` : '';
+  if (!aplicada(j.k, m)) return `<div class="who">En proceso${por}: se aplica en unos minutos</div>`;
+  if (m.url && FA[j.k] === m.url) return `<div class="who">No se pudo usar el link${por}: tiene que verse él solo, de la cintura para arriba. Probá con otra foto o con el link directo a la imagen.</div>`;
+  if (m.url) return `<div class="ok">Foto del link aplicada${por}</div>`;
+  if (m.id !== f.id) return `<div class="ok">Foto nueva: la anterior se marcó mal${por}</div>`;
+  if (m.recorte) return `<div class="ok">Ya se volvió a recortar${por}. Si sigue mal, marcá Está mal.</div>`;
+  return '';
 }
 const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
 function pasa(j, f){
@@ -140,14 +167,9 @@ function chips(){
   document.getElementById('chips').innerHTML = FILTROS.map(([id, l]) =>
     `<button class="chip" data-f="${id}" aria-pressed="${filtro === id}">${l}<span>${(n[id] || 0).toLocaleString('es-AR')}</span></button>`).join('');
 }
-function quienTxt(m){
-  if (!m || !m.quien) return '';
-  const que = m.mal ? 'Marcada mal' : m.recorte ? 'Mal recortada' : 'Link propuesto';
-  return `${que} por ${m.quien === yo ? 'vos' : esc(m.quien)}`;
-}
 function ficha(j, f){
   const m = marca(j, f) || {};
-  return `<article class="card ${m.mal || m.recorte ? 'mal' : ''}" data-k="${j.k}">
+  return `<article class="card ${(m.mal || m.recorte) && !m.hecha ? 'mal' : ''}" data-k="${j.k}">
     <div class="pics">${f.f ? `<div><img loading="lazy" src="${f.f}" alt="Foto de ${esc(j.n)}"></div><div><img loading="lazy" src="${f.m}" alt="Silueta"></div>`
                             : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
     <div class="info">
@@ -156,7 +178,7 @@ function ficha(j, f){
       ${f.tipo !== 'nada' ? `<div class="row"><button class="mark" data-a="mal" aria-pressed="${!!m.mal}" title="No es él, o la foto no sirve: se busca otra">Está mal</button>
         <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por una foto de Commons' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
       <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
-      <div class="who">${quienTxt(m)}</div>
+      <div class="nota">${nota(j, f)}</div>
     </div></article>`;
 }
 function pintar(){
@@ -241,14 +263,14 @@ function cambiar(card, cambio){
   const nueva = marca(j, f) || {};
   card.classList.toggle('mal', !!(nueva.mal || nueva.recorte));
   card.querySelectorAll('.mark').forEach(b => b.setAttribute('aria-pressed', String(!!nueva[b.dataset.a])));
-  card.querySelector('.who').innerHTML = quienTxt(nueva);
+  card.querySelector('.nota').innerHTML = nota(j, f);
   pie();
 }
 document.addEventListener('click', e => {
   const c = e.target.closest('.chip');
   if (c){ filtro = c.dataset.f; pagina = 1; pintar(); return; }
   if (e.target.id === 'more'){ pagina++; pintar(); return; }
-  if (e.target.id === 'sync'){ leerHoja(); return; }
+  if (e.target.id === 'sync'){ leerProceso().then(leerHoja); return; }
   const b = e.target.closest('[data-a="mal"], [data-a="recorte"]');
   if (b){
     if (!yo) return pedirNombre();
@@ -264,13 +286,23 @@ document.addEventListener('change', e => {
   const v = e.target.value.trim();
   if (v && !/^https?:\/\/\S+$/.test(v)){ pie('<span class="aviso">El link tiene que empezar con https://</span>'); return; }
   cambiar(e.target.closest('.card'), {url: v});
+  if (v){
+    const im = new Image();
+    im.onload = () => pie('Link guardado. Se aplica en unos minutos.');
+    im.onerror = () => pie('<span class="aviso">Ese link es de una página, no de una imagen. Se va a intentar sacar la foto de la página, pero si podés usá la dirección de la imagen (clic derecho sobre la foto → Copiar dirección de imagen).</span>');
+    im.src = v;
+  }
 });
 
 const comIndice = () => Promise.all([0,1,2,3].map(n => fetchJ(`commons/indice-${n}.json`, null)))
   .then(p => p.some(Boolean) ? Object.assign({}, ...p.filter(Boolean)) : fetchJ('commons/indice.json', {}));
-Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}), comIndice()])
-  .then(([j, t, c]) => {
-    J = j; TS = t; CO = c; listo = true;
+const partes = nombre => Promise.all([0,1,2,3].map(n => fetchJ(`commons/${nombre}-${n}.json`, {}))).then(p => Object.assign({}, ...p));
+// Lo que hizo el proceso: fotos elegidas, marcas ya aplicadas (firmas) y links que no sirvieron
+const leerProceso = () => Promise.all([fetchJ('tsdb/indice.json', TS), comIndice(), partes('rev'), partes('fallas'), fetchJ('tools/revision.json', {})])
+  .then(([t, c, rv, fa, rev]) => { TS = t; CO = c; RV = rv; FA = fa; REV = rev; });
+Promise.all([fetchJ('tools/jugadores.json', []), leerProceso()])
+  .then(([j]) => {
+    J = j; listo = true;
     // Marcas de la versión anterior de esta página (guardadas solo en este navegador): se pasan a la hoja compartida
     const viejas = leerLS(KEY_VIEJA, {});
     for (const [k, m] of Object.entries(viejas)){
@@ -281,7 +313,7 @@ Promise.all([fetchJ('tools/jugadores.json', []), fetchJ('tsdb/indice.json', {}),
     grabarLS(KEY, mias);
     pintar(); leerHoja();
   });
-setInterval(() => { if (document.visibilityState === 'visible' && listo) leerHoja(); }, 120000);
+setInterval(() => { if (document.visibilityState === 'visible' && listo) leerProceso().then(leerHoja); }, 120000);
 </script>
 </body>
 </html>

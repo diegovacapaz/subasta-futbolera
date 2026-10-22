@@ -143,12 +143,45 @@ def fondo_simple(rgb, cara):
     return float(e[banda].mean()) if banda.any() else 0.5
 
 
+UA_VISTA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+META_IMG = re.compile(r'<meta[^>]+(?:property|name)=["\'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["\'][^>]*>', re.I)
+
+
+def bajar_manual(url):
+    """Imagen (bytes) de un link propuesto en la revisión. Si el link es de una página (Instagram, Facebook,
+    X, un diario...) y no de la imagen, usa la imagen de vista previa de la página (og:image)."""
+    import html, urllib.request
+    from PIL import Image
+    def leer(u):
+        req = urllib.request.Request(u, headers={'User-Agent': UA_VISTA, 'Accept': 'text/html,image/*,*/*'})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.read(15_000_000)
+    datos = leer(url)
+    try:
+        Image.open(io.BytesIO(datos)).verify()
+        return datos
+    except Exception:
+        pass
+    pagina = datos.decode('utf-8', 'replace')
+    for tag in META_IMG.findall(pagina):
+        m = re.search(r'content=["\']([^"\']+)', tag, re.I)
+        if m:
+            img = urllib.parse.urljoin(url, html.unescape(m.group(1)))
+            datos = leer(img)
+            Image.open(io.BytesIO(datos)).verify()
+            return datos
+    raise ValueError('el link no tiene una imagen')
+
+
 def evaluar(c, j):
     """Baja la candidata y la puntúa. Devuelve (puntaje, imagen recortada, centro de la cara) o None."""
     from PIL import Image
     try:
-        rgb = Image.open(io.BytesIO(get(c['thumb'], timeout=30))).convert('RGB')
-    except Exception:
+        datos = bajar_manual(c['thumb']) if c.get('manual') else get(c['thumb'], timeout=30)
+        rgb = Image.open(io.BytesIO(datos)).convert('RGB')
+    except Exception as e:
+        if c.get('manual'):
+            print(f'  link propuesto sin imagen usable: {c["thumb"][:90]} ({e})', flush=True)
         return None
     cara = medio.una_cara(rgb)
     if not cara or cara[3] < 36:
@@ -216,7 +249,11 @@ def main():
                (t_estado.get(j['k']) in ('t2', 'no1', 'skip1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
                or j['k'] in rev)]
 
+    pf = os.path.join(args.salida, f'fallas{suf}.json')   # links propuestos que no sirvieron
+    fallas = leer(pf)
+
     def guardar():
+        json.dump(fallas, open(pf, 'w'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
         json.dump(prev, open(os.path.join(args.salida, f'rev{suf}.json'), 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(estado, open(pe, 'w'), separators=(',', ':'), sort_keys=True)
         json.dump(indice, open(pi, 'w'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
@@ -232,18 +269,17 @@ def main():
             break
         cuenta += 1
         r = rev.get(k) or {}
-        if r.get('url'):
-            cs = [{'title': r['url'], 'thumb': r['url'], 'anio': None, 'nombre_completo': True, 'manual': True}]
-        else:
-            cs = candidatas(j)
-            if cs is not None:
-                cs = [c for c in cs if c['title'] not in r.get('no', [])]
+        cs = candidatas(j)
+        if cs is not None:
+            cs = [c for c in cs if c['title'] not in r.get('no', [])]
+            if r.get('url'):    # foto propuesta en la revisión: se prueba primero
+                cs.insert(0, {'title': r['url'], 'thumb': r['url'], 'anio': None, 'nombre_completo': True, 'manual': True})
         if cs is None:
             stats['red'] += 1
             continue
         # "Mal recortada" en la revisión: esa misma foto se vuelve a recortar primero, con un modelo más preciso
         recortar = set(r.get('recortar', []))
-        if recortar and not r.get('url'):
+        if recortar:
             presentes = {c['title'] for c in cs}
             for t in recortar - presentes:
                 try:
@@ -256,7 +292,7 @@ def main():
             if ev:
                 evaluadas.append((ev, c))
             time.sleep(0.2)
-        evaluadas.sort(key=lambda x: (x[1]['title'] not in recortar, -x[0][0]))
+        evaluadas.sort(key=lambda x: (not x[1].get('manual'), x[1]['title'] not in recortar, -x[0][0]))
         listo = None
         for (puntos, crop, centro), c in evaluadas[:3 + len(recortar)]:
             ses = sessions
@@ -279,8 +315,8 @@ def main():
             open(os.path.join(args.salida, 'm', k + '.png'), 'wb').write(medio.sil_png(cut.getchannel('A')))
             open(os.path.join(args.salida, 'f', k + '.webp'), 'wb').write(medio.color_webp(cut))
             src = c['title'] if c.get('manual') else 'https://commons.wikimedia.org/wiki/' + urllib.parse.quote(c['title'].replace(' ', '_'))
-            # '!' adelante: esta foto va antes que la de TheSportsDB (porque la de TheSportsDB se marcó como mala)
-            indice[k] = ('!' if 'tsdb' in r.get('no', []) else '') + src
+            # '!' adelante: esta foto va antes que la de TheSportsDB (se marcó como mala, o se propuso otra a mano)
+            indice[k] = ('!' if 'tsdb' in r.get('no', []) or c.get('manual') else '') + src
             estado[k] = OK
             stats['con foto'] += 1
         else:
@@ -294,6 +330,10 @@ def main():
                 except OSError:
                     pass
             stats['sin foto'] += 1
+        if r.get('url') and not (listo and listo[1].get('manual')):
+            fallas[k] = r['url']
+        else:
+            fallas.pop(k, None)
         if k in rev:
             prev[k] = firma(k)
         hechos += 1
