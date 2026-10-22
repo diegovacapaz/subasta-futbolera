@@ -149,10 +149,15 @@ function nota(j, f){
   if (m.recorte) return `<div class="ok">Ya se volvió a recortar${por}. Si sigue mal, marcá Está mal.</div>`;
   return '';
 }
-const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['troll','Trolls'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
+// Los mismos clubes grandes que usa el juego
+const GRANDES = new Set(['River Plate','Boca Juniors','Racing Club','Independiente','San Lorenzo','Real Madrid','Barcelona','Atlético de Madrid','Bayern Múnich',
+  'Borussia Dortmund','Manchester City','Manchester United','Liverpool','Arsenal','Chelsea','Tottenham Hotspur','Paris Saint-Germain','Juventus',
+  'Inter','AC Milan','Napoli','Benfica','Porto','Sporting CP','Ajax','Flamengo','Palmeiras']);
+const FILTROS = [['todos','Con foto'], ['tops','Tops'], ['ley','Leyendas'], ['troll','Trolls'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
 function pasa(j, f){
   if (filtro === 'marcadas') return !!marca(j, f);
   if (filtro === 'troll') return !!j.troll;
+  if (filtro === 'tops') return !j.troll && GRANDES.has(j.club);
   if (filtro === 'nada') return f.tipo === 'nada';
   if (f.tipo === 'nada') return false;
   if (filtro === 'ley') return j.ley;
