@@ -1,1 +1,31 @@
-{}
+{
+ "n-pele-1940": {
+  "by": 1940,
+  "club": "Santos",
+  "n": "Pelé",
+  "nat": "Brasil",
+  "oculto": false,
+  "p": "DC",
+  "quien": "Juan",
+  "t": 1792705721401.0,
+  "v": 250.0
+ },
+ "t-agusneta": {
+  "n": "Agusneta",
+  "nat": "",
+  "oculto": false,
+  "p": "DFC",
+  "precio": 20.0,
+  "quien": "Juan",
+  "t": 1792705776217.0
+ },
+ "t-oliver-atom": {
+  "n": "Oliver Atom",
+  "nat": "Japón",
+  "oculto": false,
+  "p": "MC",
+  "precio": 55.0,
+  "quien": "Juan",
+  "t": 1792705969379.0
+ }
+}
