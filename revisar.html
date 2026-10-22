@@ -110,6 +110,7 @@ const hash = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0))
 function fuente(j){
   const c = CO[j.k] || '', veto = c[0] === '!', com = c.replace(/^!/, ''), v = '?v=' + hash(c + '|' + (RV[j.k] || ''));
   if (!veto && (TS[j.k] || '').includes('m')) return {tipo:'tsdb', id:'tsdb', f:`tsdb/f/${j.k}.webp`, m:`tsdb/m/${j.k}.png`};
+  if (!veto && j.troll && !com && (TS[j.k] || '').includes('b')) return {tipo:'tsdb', id:'tsdb', f:`tsdb/f/${j.k}.webp`, m:`tsdb/b/${j.k}.png`};
   if (com){
     const t = com.startsWith('https://commons.wikimedia.org/wiki/') ? decodeURIComponent(com.split('/wiki/')[1]).replace(/_/g, ' ') : com;
     return {tipo:'commons', id:t, link:com, f:`commons/f/${j.k}.webp${v}`, m:`commons/m/${j.k}.png${v}`};
@@ -148,9 +149,10 @@ function nota(j, f){
   if (m.recorte) return `<div class="ok">Ya se volvió a recortar${por}. Si sigue mal, marcá Está mal.</div>`;
   return '';
 }
-const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
+const FILTROS = [['todos','Con foto'], ['ley','Leyendas'], ['troll','Trolls'], ['tsdb','TheSportsDB'], ['commons','Commons'], ['nada','Sin medio cuerpo'], ['marcadas','Marcadas']];
 function pasa(j, f){
   if (filtro === 'marcadas') return !!marca(j, f);
+  if (filtro === 'troll') return !!j.troll;
   if (filtro === 'nada') return f.tipo === 'nada';
   if (f.tipo === 'nada') return false;
   if (filtro === 'ley') return j.ley;
@@ -174,9 +176,9 @@ function ficha(j, f){
                             : `<div class="empty">Sin foto de medio cuerpo</div><div class="empty">Pegá un link abajo para sumarle una</div>`}</div>
     <div class="info">
       <div class="name" title="${esc(j.n)}">${esc(j.n)}</div>
-      <div class="meta"><span>${j.ley ? 'Leyenda' : 'Actual'} · ${j.by || '—'}</span><span>${f.tipo === 'tsdb' ? 'TheSportsDB' : f.tipo === 'commons' ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">Commons</a>` : 'Busto o genérica'}</span></div>
+      <div class="meta"><span>${j.troll ? 'Troll' : (j.ley ? 'Leyenda' : 'Actual') + ' · ' + (j.by || '—')}</span><span>${f.tipo === 'tsdb' ? (j.troll ? 'Foto del pack' : 'TheSportsDB') : f.tipo === 'commons' ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">Commons</a>` : 'Busto o genérica'}</span></div>
       ${f.tipo !== 'nada' ? `<div class="row"><button class="mark" data-a="mal" aria-pressed="${!!m.mal}" title="No es él, o la foto no sirve: se busca otra">Está mal</button>
-        <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por una foto de Commons' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
+        <button class="mark" data-a="recorte" aria-pressed="${!!m.recorte}" title="${f.tipo === 'tsdb' ? 'Se reemplaza por otra foto' : 'Se vuelve a recortar esta misma foto con un modelo más preciso'}">Mal recortada</button></div>` : ''}
       <input class="url" data-a="url" value="${esc(m.url || '')}" placeholder="Link a otra foto (opcional)" aria-label="Link a otra foto de ${esc(j.n)}">
       <div class="nota">${nota(j, f)}</div>
     </div></article>`;

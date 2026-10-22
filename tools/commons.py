@@ -245,8 +245,9 @@ def main():
         jug = [j for j in jug if j['n'] in nombres]
     else:   # solo los que TheSportsDB ya revisó y no tienen medio cuerpo
         veto = lambda k: 'tsdb' in (rev.get(k) or {}).get('no', [])
+        # los trolls usan la foto que vino en el pack: solo se les busca otra si alguien lo pide en la revisión
         jug = [j for j in jug if mia(j['k']) and (
-               (t_estado.get(j['k']) in ('t2', 'no1', 'skip1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
+               (not j.get('troll') and t_estado.get(j['k']) in ('t2', 'no1', 'skip1') and ('m' not in t_indice.get(j['k'], '') or veto(j['k'])))
                or j['k'] in rev)]
 
     pf = os.path.join(args.salida, f'fallas{suf}.json')   # links propuestos que no sirvieron
