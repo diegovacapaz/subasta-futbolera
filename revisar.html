@@ -366,7 +366,8 @@ form.addEventListener('submit', e => {
   // Ya existe si es el mismo nombre, o si uno contiene al otro (Labruna / Ángel Labruna) y nacieron el mismo año
   const limpio = x => ' ' + norm(x.replace(/\s*\(.*?\)/g, '')).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   const base = limpio(n);
-  const igual = J.find(j => { const o = limpio(j.n);
+  const igual = J.find(j => { if (!!j.troll !== (t === 'troll')) return false;   // un troll puede ser la versión mala de un crack
+    const o = limpio(j.n);
     if (o === base) return !by || !j.by || j.by === by;
     return by && j.by === by && (o.includes(base) || base.includes(o)); });
   if (igual){ msg.innerHTML = `<span class="aviso">Ya está en el juego: ${esc(igual.n)}${igual.by ? ' (' + igual.by + ')' : ''}. Buscalo con el buscador.</span>`; return; }
