@@ -259,6 +259,21 @@ body.phone #app{max-width:520px}
 .ph-name{display:block;font-family:var(--f-display);font-weight:900;font-size:32px;text-transform:uppercase;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
 .ph-left{text-align:right}
 .ph-left b{display:block;font-family:var(--f-display);font-size:30px;font-weight:800;line-height:1}
+.votos{display:grid;gap:8px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.voto-chips{display:flex;flex-wrap:wrap;gap:6px}
+.voto{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 12px;font-weight:600;font-size:14px}
+.voto.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ph-vote{display:grid;gap:8px}
+.ph-vote .ph-faltan{font-size:13px;color:var(--muted)}
+.ph-vbtn{border:2px solid var(--accent);background:var(--surface);color:var(--ink);border-radius:12px;padding:14px;font-weight:700;font-size:16px}
+.ph-vbtn.on{background:var(--accent);color:var(--accent-ink)}
+.ph-vrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ph-rivals{display:grid;gap:8px}
+.ph-rival summary{display:flex;justify-content:space-between;gap:8px;cursor:pointer;font-weight:700;list-style:none}
+.ph-rival summary::-webkit-details-marker{display:none}
+.ph-rival summary .num{color:var(--accent)}
+.ph-rival .rows{margin-top:8px}
+.ph-rival{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface-2)}
 .ph-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:12px;min-width:0}
 .ph-pos b{display:block;font-family:var(--f-display);font-weight:800;font-size:32px;text-transform:uppercase;line-height:1}
 .ph-stage{position:relative;height:190px;border-radius:12px;overflow:hidden;display:flex;justify-content:center;align-items:flex-end;
@@ -738,6 +753,7 @@ function vMarket(){
         <button class="secondary" data-a="m-trade" ${chk.ok?'':'disabled'}>Confirmar traspaso</button>
         <button class="primary" data-a="m-next">${nextLabel}</button>
       </div>
+      ${anyPhones() ? vVotos('mk') : ''}
       ${log.length ? `<div><span class="label">Pases hechos</span><ul class="mk-log">${log.map(tr=>`<li><b>${esc(S.parts[tr.a].name)}</b> cambió ${esc(getP(tr.ia).short)} por ${esc(getP(tr.ib).short)} con <b>${esc(S.parts[tr.b].name)}</b>${tr.dir==='none'?'':' · ' + esc(S.parts[tr.dir==='a'?tr.a:tr.b].name) + ' pagó ' + fmt(tr.amt)}</li>`).join('')}</ul></div>` : ''}
     </div>
   </section>`;
@@ -959,6 +975,7 @@ function vSold(){
       ${tr ? `<p class="trollnote">Era un precio trampa: lo mostramos a <span class="num">${fmt(base(L.id))}</span> pero su valor real es <span class="num">${fmt(p.v)}</span>.${L.buyer<0 ? ' Bien olfateado.' : ''}</p>` : ''}
       ${done && S.cfg.market ? `<p class="note">Terminó la ronda de ${POS[slots()[S.slot].t].label.toLowerCase()}. ¿Abren el mercado de pases o siguen?</p>` : ''}
       <div class="actions"><button class="primary" data-a="next">${nextLabel}</button>${done && S.cfg.market ? `<button class="secondary" data-a="market">Ir al mercado de pases</button>` : ''}</div>
+      ${anyPhones() ? vVotos('next') : ''}
     </div>
   </section>`;
 }
@@ -1031,6 +1048,9 @@ document.addEventListener('click', e=>{
     case 'qr': showQR = !showQR; break;
     case 'sellbid': { if (!S.bid || rolling) return; sell(S.bid.pi, S.bid.amt); sel = null; break; }
     case 'draw': startDraw(); return;
+    case 'vt': { const i = +t.dataset.i, k = t.dataset.k, v = vt();
+      const on = k === 'skip' ? v.skip.includes(i) : k === 'next' ? !!v.next[i] : v.mk.includes(i);
+      castVote(i, k, !on, 'next'); if (rolling) return; break; }
     case 'form': c.formation = t.dataset.f; break;
     case 'minv': c.minV = +t.dataset.v; break;
     case 'lg': { const k = t.dataset.k; c.leagues = c.leagues.includes(k) ? c.leagues.filter(x=>x!==k) : [...c.leagues, k]; break; }
@@ -1163,6 +1183,82 @@ function skipBtn(primary){
 function skipInfo(){
   return `<p class="skipinfo">${S.skipUsed ? 'Ya se usó el salteo de esta posición: si nadie puja, se sortea quién lo compra al precio base.' : 'Queda 1 salteo en esta posición. Después, si nadie puja, se sortea quién lo compra al precio base.'}</p>`;
 }
+// ---------- Votos desde los teléfonos: saltear, pasar al siguiente, mercado ----------
+// Cada lote/resultado tiene su clave; los votos de otra clave no valen. La compu también puede marcar a quien no tiene teléfono.
+function voteKey(){
+  if (S.phase === 'lot') return 'L' + curLotKey();
+  if (S.phase === 'sold' && S.last) return 'S' + S.slot + '-' + S.lotNo + '-' + S.last.id;
+  if (S.phase === 'market') return 'M' + S.slot;
+  return '';
+}
+function vt(){
+  const k = voteKey();
+  if (!S.vt || S.vt.key !== k) S.vt = {key: k, skip: [], next: {}, mk: []};
+  return S.vt;
+}
+const roundEnd = () => S.phase === 'sold' && !needers().length;
+// Quiénes tienen que votar en cada momento
+function voters(kind){
+  if (kind === 'skip') return needers();
+  return S.parts.map((p, i) => i);
+}
+function voted(kind){
+  const v = vt();
+  if (kind === 'skip') return v.skip.slice();
+  if (kind === 'next') return Object.keys(v.next).map(Number);
+  return v.mk.slice();
+}
+function castVote(pi, kind, on, choice){
+  const v = vt();
+  if (kind === 'skip'){
+    if (S.phase !== 'lot' || S.bid || rolling || !needers().includes(pi)) return 'Ahora no se puede saltear.';
+    v.skip = v.skip.filter(i => i !== pi); if (on) v.skip.push(pi);
+  } else if (kind === 'next'){
+    if (S.phase !== 'sold') return 'Ya se pasó al siguiente.';
+    delete v.next[pi]; if (on) v.next[pi] = choice === 'market' && roundEnd() && S.cfg.market ? 'market' : 'next';
+  } else if (kind === 'mk'){
+    if (S.phase !== 'market') return 'El mercado ya cerró.';
+    v.mk = v.mk.filter(i => i !== pi); if (on) v.mk.push(pi);
+  } else return 'Voto desconocido.';
+  resolveVotes();
+  return null;
+}
+// Si votaron todos los que tienen que votar, se avanza solo
+function resolveVotes(){
+  if (rolling) return;
+  const v = vt();
+  if (S.phase === 'lot'){
+    const ns = needers();
+    if (S.bid){ v.skip = []; return; }
+    if (!ns.length || !ns.every(i => v.skip.includes(i))) return;
+    if (!S.skipUsed){ pass(); sel = null; render(); window.scrollTo({top:0}); }
+    else { render(); startDraw(); }
+  } else if (S.phase === 'sold'){
+    const all = voters('next');
+    if (!all.every(i => v.next[i])) return;
+    const mercado = roundEnd() && S.cfg.market && all.some(i => v.next[i] === 'market');
+    if (mercado){ S.phase = 'market'; resetMarket(); } else next();
+    sel = null; render(); window.scrollTo({top:0});
+  } else if (S.phase === 'market'){
+    if (!voters('mk').every(i => v.mk.includes(i))) return;
+    next(); sel = null; render(); window.scrollTo({top:0});
+  }
+}
+// Panel con quién ya votó; tocando un nombre, la compu marca o desmarca a ese jugador
+function vVotos(kind){
+  if (!S.parts.length) return '';
+  const who = voters(kind), v = vt();
+  if (!who.length) return '';
+  const on = i => kind === 'skip' ? v.skip.includes(i) : kind === 'next' ? !!v.next[i] : v.mk.includes(i);
+  const n = who.filter(on).length;
+  const titulo = kind === 'skip' ? (S.skipUsed ? 'Nadie puja: sortear' : 'Saltear') : kind === 'next' ? 'Listos para seguir' : 'Terminaron con los pases';
+  const extra = i => kind === 'next' && v.next[i] === 'market' ? ' · mercado' : '';
+  return `<div class="votos" id="votos"><span class="label">${titulo} · <b class="num">${n}/${who.length}</b></span>
+    <div class="voto-chips">${who.map(i => `<button class="voto ${on(i) ? 'on' : ''}" data-a="vt" data-k="${kind}" data-i="${i}" aria-pressed="${on(i)}" title="${S.parts[i].cid ? 'Vota desde su teléfono' : 'No tiene teléfono: tocá para marcarlo'}">${esc(S.parts[i].name)}${extra(i)}</button>`).join('')}</div>
+    <p class="note">${kind === 'skip' ? 'Cuando todos los que necesitan esta posición tocan Saltear en el teléfono, se saltea solo' + (S.skipUsed ? ' (ya no quedan salteos: se sortea quién lo compra al precio base)' : '') + '. Cualquier puja cancela los votos.'
+      : kind === 'next' ? 'Cuando todos tocan Siguiente en el teléfono, se pasa solo.' + (roundEnd() && S.cfg.market ? ' Si alguno pide mercado de pases, se abre el mercado.' : '')
+      : 'Cuando todos tocan Listo en el teléfono, se sigue con la próxima posición.'} Quien no tiene teléfono se marca tocando su nombre.</p></div>`;
+}
 function vLive(){
   const b = S.bid, ns = needers();
   const prev = S.bids.slice(0, -1).slice(-5).reverse();
@@ -1174,7 +1270,7 @@ function vLive(){
     ${prev.length ? `<p class="live-log">Antes: ${prev.map(x => esc(S.parts[x.pi].name) + ' ' + num1(x.amt) + ' M').join(' · ')}</p>` : ''}
     ${ns.length === 1 ? `<p class="note">${onlyOneNote(ns[0])}</p>` : ''}
     <div class="actions">${b ? `<button class="primary" data-a="sellbid">¡Vendido a ${esc(S.parts[b.pi].name)} por ${fmt(b.amt)}!</button>` : skipBtn(true)}</div>
-    ${b ? '' : skipInfo()}`;
+    ${b ? '' : skipInfo() + (anyPhones() ? vVotos('skip') : '')}`;
 }
 const curLotKey = () => S.phase === 'lot' ? `${S.slot}-${S.lotNo}-${S.queue[0]}` : '';
 function hostBid(pi, raw, key){
@@ -1190,6 +1286,7 @@ function hostBid(pi, raw, key){
   if (!S.bid && amt < b) return `La primera puja arranca en ${fmt(b)}.`;
   if (amt > P.left) return `No te alcanza: te quedan ${fmt(P.left)}.`;
   S.bid = {pi, amt}; S.bids.push({pi, amt}); if (S.bids.length > 40) S.bids.shift();
+  vt().skip = [];
   S.deadline = timerMs() ? Date.now() + timerMs() : null;
   return null;
 }
@@ -1340,6 +1437,15 @@ function onPhoneMsg(conn, m){
     send(conn, stateFor(cid));
     return;
   }
+  if (m.t === 'vote'){
+    const pi = S.parts.findIndex(p => p.cid === cid);
+    if (pi < 0) return send(conn, {t:'nack', msg:'No estás en esta partida.'});
+    if (m.key !== voteKey()) return send(conn, stateFor(cid));
+    const err = castVote(pi, m.kind, !!m.on, m.choice);
+    if (err) return send(conn, {t:'nack', msg: err});
+    if (S.phase === 'lot' || S.phase === 'sold' || S.phase === 'market'){ save(); const vb = document.getElementById('votos'); if (vb) vb.outerHTML = vVotos(S.phase === 'lot' ? 'skip' : S.phase === 'sold' ? 'next' : 'mk'); broadcast(); }
+    return;
+  }
   if (m.t === 'bid'){
     const pi = S.parts.findIndex(p => p.cid === cid);
     if (pi < 0) return send(conn, {t:'nack', msg:'No estás en esta partida.'});
@@ -1358,6 +1464,16 @@ function stateFor(cid){
   const P = S.parts[pi];
   const st = {t:'state', phase:S.phase, name:P.name, left:P.left, slotNo:S.slot + 1,
     team: slots().map((s,k) => { const e = P.team[k]; return {pos: POS[s.t].s, n: e ? getP(e.id).n : '', price: e ? e.price : 0, troll: !!(e && isTroll(e.id))}; })};
+  // Billeteras y equipos de todos, para la vista de rivales
+  st.parts = S.parts.map((Q, i) => ({name: Q.name, left: Q.left, me: i === pi,
+    team: slots().map((s,k) => { const e = Q.team[k]; return {pos: POS[s.t].s, n: e ? getP(e.id).n : '', price: e ? e.price : 0, troll: !!(e && isTroll(e.id))}; })}));
+  const kind = S.phase === 'lot' ? 'skip' : S.phase === 'sold' ? 'next' : S.phase === 'market' ? 'mk' : '';
+  if (kind && !(kind === 'skip' && S.bid)){
+    const who = voters(kind), yes = voted(kind).filter(i => who.includes(i));
+    st.vote = {key: voteKey(), kind, n: yes.length, total: who.length, can: who.includes(pi), mine: yes.includes(pi),
+               choice: kind === 'next' ? (vt().next[pi] || '') : '', market: kind === 'next' && roundEnd() && !!S.cfg.market,
+               drawNext: kind === 'skip' && S.skipUsed, faltan: who.filter(i => !yes.includes(i)).map(i => S.parts[i].name)};
+  }
   if (S.phase === 'lot'){
     const id = S.queue[0];
     st.lot = {key: curLotKey(), pos: POS[slotType()].label, lotNo: S.lotNo, base: base(id), hints: hintList(id),
@@ -1448,7 +1564,7 @@ function phoneMain(code){
   if (!cid){ cid = 'c' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); try { localStorage.setItem('remate-cid', cid); } catch(e){} }
   let saved = {}; try { saved = JSON.parse(localStorage.getItem('remate-yo') || '{}'); } catch(e){}
   const PH = {status:'connecting', st:null, name: saved.mesa === code ? (saved.name || '') : '', editing:false, msg:'', ok:false,
-              key:'', wasMine:false, teamOpen:false, cv:null, cvUrl:'', peer:null, conn:null, retry:null};
+              key:'', wasMine:false, teamOpen:false, rivals:new Set(), cv:null, cvUrl:'', peer:null, conn:null, retry:null};
   const app = document.getElementById('app');
 
   function connect(){
@@ -1492,6 +1608,13 @@ function phoneMain(code){
       PH.deadline = m.bid && m.remain ? Date.now() + m.remain : 0; PH.total = m.timer || 0;
       draw();
     } else if (m.t === 'nack'){ PH.msg = m.msg; PH.ok = false; draw(); }
+  }
+  function vote(kind, on, choice){
+    const v = PH.st && PH.st.vote; if (!v) return;
+    if (!out({t:'vote', key: v.key, kind, on, choice})){ PH.msg = 'Sin conexión con la compu. Reintentando…'; PH.ok = false; draw(); return; }
+    // se muestra enseguida; la compu confirma con el estado nuevo
+    const antes = kind === 'next' ? !!v.choice : v.mine;
+    v.mine = on; v.choice = on ? (choice || 'next') : ''; v.n = Math.max(0, v.n + (on ? 1 : 0) - (antes ? 1 : 0)); draw();
   }
   function bid(amt){
     if (!PH.st || !PH.st.lot) return;
@@ -1545,8 +1668,38 @@ function phoneMain(code){
       <div class="ph-bid ${b && b.mine ? 'mine' : ''}">${b ? `<span>${b.mine ? 'Vas ganando vos' : 'Va ganando ' + esc(b.name)}</span><b class="num">${fmt(b.amt)}</b>` : `<span>Todavía nadie pujó</span>`}</div>
       ${b && PH.deadline && PH.total ? vCountdown(PH.deadline - Date.now(), PH.total, ['ph-cd','ph-cdbar','ph-cdtxt']) : ''}
       ${ctl}
+      ${!b ? vVotePh(st) : ''}
       <p class="ph-msg ${PH.ok ? 'ok' : ''}" aria-live="polite">${esc(PH.msg)}</p>
     </section>`;
+  }
+  // Botones de voto: saltear, siguiente, mercado. Cuando votan todos, la compu avanza sola.
+  function vVotePh(st){
+    const v = st.vote; if (!v) return '';
+    const cuenta = `<b class="num">${v.n}/${v.total}</b>`;
+    const faltan = v.faltan && v.faltan.length && v.n < v.total ? `<p class="ph-faltan">Faltan: ${v.faltan.map(esc).join(', ')}</p>` : '';
+    if (v.kind === 'skip'){
+      if (!v.can) return `<div class="ph-vote"><p class="ph-faltan">${v.drawNext ? 'Sortear' : 'Saltear'}: ${cuenta} de los que necesitan la posición</p></div>`;
+      const lab = v.drawNext ? 'Nadie puja: sortear' : 'Saltear';
+      return `<div class="ph-vote"><button class="ph-vbtn ${v.mine ? 'on' : ''}" data-a="ph-vote" data-k="skip" aria-pressed="${v.mine}">${v.mine ? '✓ ' : ''}${lab} · ${cuenta}</button>
+        ${v.mine ? `<p class="ph-faltan">Tocá de nuevo para deshacer.${v.drawNext ? ' Si votan todos, se sortea quién lo compra al precio base.' : ' Si votan todos, se saltea.'}</p>` : ''}${faltan}</div>`;
+    }
+    if (v.kind === 'next' && v.market){
+      return `<div class="ph-vote"><span class="label">Terminó la ronda · ${cuenta}</span><div class="ph-vrow">
+        <button class="ph-vbtn ${v.choice === 'next' ? 'on' : ''}" data-a="ph-vote" data-k="next" data-c="next">Seguir</button>
+        <button class="ph-vbtn ${v.choice === 'market' ? 'on' : ''}" data-a="ph-vote" data-k="next" data-c="market">Mercado de pases</button></div>
+        <p class="ph-faltan">Si alguno pide mercado, se abre el mercado.</p>${faltan}</div>`;
+    }
+    const lab = v.kind === 'mk' ? 'Listo, seguir' : 'Siguiente';
+    return `<div class="ph-vote"><button class="ph-vbtn ${v.mine ? 'on' : ''}" data-a="ph-vote" data-k="${v.kind}" aria-pressed="${v.mine}">${v.mine ? '✓ ' : ''}${lab} · ${cuenta}</button>${faltan}</div>`;
+  }
+  // Billeteras y equipos de los demás
+  function vRivals(st){
+    const otros = (st.parts || []).filter(x => !x.me); if (!otros.length) return '';
+    return `<section class="ph-card ph-rivals"><span class="label">Los demás</span>
+      ${otros.map(x => `<details class="ph-rival" data-rival="${esc(x.name)}" ${PH.rivals.has(x.name) ? 'open' : ''}>
+        <summary><span>${esc(x.name)} · ${x.team.filter(t => t.n).length}/11</span><span class="num">${fmt(x.left)}</span></summary>
+        <div class="rows">${x.team.map((t, k) => `<div class="row ${t.n ? '' : 'empty'} ${k === st.slotNo - 1 ? 'cur' : ''}"><span class="p">${t.pos}</span><span class="n ${t.troll ? 'trolled' : ''}">${t.n ? esc(t.n) : '—'}</span><span class="num">${t.n ? fmt(t.price) : ''}</span></div>`).join('')}</div>
+      </details>`).join('')}</section>`;
   }
   function vSoldPh(st){
     const s = st.sold;
@@ -1560,6 +1713,7 @@ function phoneMain(code){
       <span class="label">Era</span><div class="ph-who">${esc(s.who)}</div>
       <p class="ph-note">${esc(s.club)} · valor real ${fmt(s.real)}</p>
       <p class="ph-banner">${line}</p>
+      ${vVotePh(st)}
     </section>`;
   }
   function view(){
@@ -1580,9 +1734,9 @@ function phoneMain(code){
     let body = '';
     if (st.phase === 'lot') body = vLotPh(st);
     else if (st.phase === 'sold') body = vSoldPh(st);
-    else if (st.phase === 'market') body = `<section class="ph-card"><div class="ph-who">Mercado de pases</div><p class="ph-note">Los traspasos se arreglan de palabra y se cargan en la compu.</p></section>`;
+    else if (st.phase === 'market') body = `<section class="ph-card"><div class="ph-who">Mercado de pases</div><p class="ph-note">Los traspasos se arreglan de palabra y se cargan en la compu. Cuando termines, tocá Listo.</p>${vVotePh(st)}</section>`;
     else if (st.phase === 'end') body = `<section class="ph-card"><div class="ph-who">Terminó la subasta</div><p class="ph-note">Miren la pantalla y voten el mejor equipo.</p></section>`;
-    return `<div class="ph">${conn}${header(st)}${body}${team(st)}</div>`;
+    return `<div class="ph">${conn}${header(st)}${body}${team(st)}${vRivals(st)}</div>`;
   }
   function draw(){
     const ae = document.activeElement, keep = ae && ae.id ? {id: ae.id, v: ae.value, s: ae.selectionStart} : null;
@@ -1638,8 +1792,17 @@ function phoneMain(code){
     const t = e.target.closest('[data-a]'); if (!t) return;
     if (t.dataset.a === 'ph-bid') bid(+t.dataset.v);
     if (t.dataset.a === 'ph-edit'){ PH.editing = true; draw(); }
+    if (t.dataset.a === 'ph-vote'){
+      const v = PH.st && PH.st.vote; if (!v) return;
+      const c = t.dataset.c;
+      if (c) vote('next', v.choice !== c, c);        // seguir / mercado: tocar el mismo lo deshace
+      else vote(t.dataset.k, !v.mine);
+    }
   });
-  document.addEventListener('toggle', e => { if (e.target.id === 'ph-team') PH.teamOpen = e.target.open; }, true);
+  document.addEventListener('toggle', e => {
+    if (e.target.id === 'ph-team') PH.teamOpen = e.target.open;
+    const r = e.target.dataset && e.target.dataset.rival; if (r){ if (e.target.open) PH.rivals.add(r); else PH.rivals.delete(r); }
+  }, true);
   setInterval(() => { if (PH.deadline && PH.total) paintCountdown('ph-cd', 'ph-cdbar', 'ph-cdtxt', PH.deadline - Date.now(), PH.total); }, 200);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && PH.status !== 'open') connect(); });
   draw();
