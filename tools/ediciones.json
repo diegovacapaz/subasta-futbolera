@@ -59,6 +59,33 @@
   "quien": "Juan",
   "t": 1792705776217.0
  },
+ "t-alexis-ferrero": {
+  "n": "Alexis Ferrero",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 45.0,
+  "quien": "Lucas",
+  "t": 1792774615675.0
+ },
+ "t-bruno-bianchi": {
+  "n": "Bruno Bianchi",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 55.0,
+  "quien": "Lucas",
+  "t": 1792774622709.0
+ },
+ "t-komar": {
+  "n": "Komar",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 50.0,
+  "quien": "Lucas",
+  "t": 1792774611927.0
+ },
  "t-oliver-atom": {
   "n": "Oliver Atom",
   "nat": "Japón",
