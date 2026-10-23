@@ -90,6 +90,9 @@
  "n-dennis-bergkamp-1969": {
   "url": "https://www.facebook.com/Arsenal/posts/when-dennis-bergkamp-looks-in-the-mirror-he-doesnt-see-a-reflection-because-ther/10158016821562713/"
  },
+ "n-didi-1928": {
+  "url": "https://static.wikia.nocookie.net/futbol/images/6/62/Didi.jpg/revision/latest?cb=20121226071646"
+ },
  "n-diego-forlan-1979": {
   "url": "https://imagenes.elpais.com/resizer/v2/NPZZ4CPKYHNDV4G2PXHSZD5AHY.jpg?auth=9fe421878ab1274ef1f7da0ed37719fa2569d0b7e23cb5275afecc7dee7dfa79&width=1960&height=1470&focal=465%2C141"
  },
@@ -272,6 +275,9 @@
  },
  "n-martin-palermo-1973": {
   "url": "https://i.pinimg.com/736x/96/c3/9a/96c39a32b77a5ffbad675da21fa5b62b.jpg"
+ },
+ "n-matthias-sammer-1967": {
+  "url": "https://i0.wp.com/thesefootballtimes.co/wp-content/uploads/2018/06/sammer.jpg?fit=1800%2C1258&ssl=1"
  },
  "n-mauro-tassotti-1960": {
   "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT3UoAjZTSPe8j-aqN4MRa_GFNT1oYy5RF00YHDoWY23CSgdkHLQcjY6lc&s=10"
@@ -465,11 +471,57 @@
  "t-agusneta": {
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk2qkjs8nh0e7.jpg"
  },
+ "t-arturo-mina": {
+  "no": [
+   "tsdb"
+  ]
+ },
  "t-brian-sarmiento": {
-  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk4capsk5ztyg.jpg"
+  "url": "https://showonline.com.ar/download/multimedia.normal.b4e71f79b6009ad4.bm9ybWFsLndlYnA%3D.webp"
+ },
+ "t-cellay": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-chavez": {
+  "url": "https://s.hs-data.com/gfx/person/l/252841.jpg?fallback=male"
+ },
+ "t-chiqui-tapia": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-federico-fazio": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-garnacho": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-german-lux": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-licht": {
+  "no": [
+   "tsdb"
+  ]
+ },
+ "t-nahuel-gallardo": {
+  "no": [
+   "tsdb"
+  ]
  },
  "t-oliver-atom": {
   "url": "https://assets.dev-filo.dift.io/img/2019/07/28/0efef6fddc11fd70ad4ec62ccd33039a_sq.jpg"
+ },
+ "t-pulga-rodriguez": {
+  "url": "https://img.lagaceta.com.ar/fotos/notas/2024/01/13/600x400_mercado-de-pases-pulguita-rodriguez-se-va-gimnasia-esgrima-jujuy-1020702-140109.webp"
  },
  "tm1000684": {
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkck76s9wwlwn.jpg"
