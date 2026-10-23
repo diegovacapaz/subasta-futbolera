@@ -68,6 +68,16 @@
   "quien": "Lucas",
   "t": 1792774615675.0
  },
+ "t-amorebieta": {
+  "n": "Amorebieta",
+  "nat": "Venezuela",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 60.0,
+  "quien": "Lucas",
+  "t": 1792775367698.0,
+  "tipo": "troll"
+ },
  "t-augusto-max": {
   "n": "Augusto Max",
   "nat": "Argentina",
@@ -95,6 +105,16 @@
   "quien": "Lucas",
   "t": 1792774671908.0
  },
+ "t-chumacero": {
+  "n": "Chumacero",
+  "nat": "Bolivia",
+  "oculto": true,
+  "p": "MC",
+  "precio": 45.0,
+  "quien": "Lucas",
+  "t": 1792775431044.0,
+  "tipo": "troll"
+ },
  "t-emiliano-papa": {
   "n": "Emiliano Papa",
   "nat": "Argentina",
@@ -103,6 +123,16 @@
   "precio": 40.0,
   "quien": "Lucas",
   "t": 1792774682591.0
+ },
+ "t-fabbro": {
+  "n": "Fabbro (Preso)",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "MC",
+  "precio": 65.0,
+  "quien": "Lucas",
+  "t": 1792775448105.0,
+  "tipo": "troll"
  },
  "t-federico-vismara": {
   "n": "Federico Vismara",
@@ -113,6 +143,26 @@
   "quien": "Lucas",
   "t": 1792774641284.0
  },
+ "t-joaquin-laso": {
+  "n": "Joaquín Laso",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 45.0,
+  "quien": "Lucas",
+  "t": 1792775351105.0,
+  "tipo": "troll"
+ },
+ "t-kaprof": {
+  "n": "Kaprof",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "ED",
+  "precio": 60.0,
+  "quien": "Lucas",
+  "t": 1792775417999.0,
+  "tipo": "troll"
+ },
  "t-komar": {
   "n": "Komar",
   "nat": "Argentina",
@@ -121,6 +171,46 @@
   "precio": 50.0,
   "quien": "Lucas",
   "t": 1792774611927.0
+ },
+ "t-luciano-lollo": {
+  "n": "Luciano Lollo",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 50.0,
+  "quien": "Lucas",
+  "t": 1792775364414.0,
+  "tipo": "troll"
+ },
+ "t-lussenhoff": {
+  "n": "Lussenhoff",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 40.0,
+  "quien": "Lucas",
+  "t": 1792775361747.0,
+  "tipo": "troll"
+ },
+ "t-matias-caruzzo": {
+  "n": "Matías Caruzzo",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "DFC",
+  "precio": 60.0,
+  "quien": "Lucas",
+  "t": 1792775391548.0,
+  "tipo": "troll"
+ },
+ "t-menseguez": {
+  "n": "Menseguez",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "EI",
+  "precio": 60.0,
+  "quien": "Lucas",
+  "t": 1792775470578.0,
+  "tipo": "troll"
  },
  "t-oliver-atom": {
   "n": "Oliver Atom",
@@ -139,6 +229,26 @@
   "precio": 45.0,
   "quien": "Juan",
   "t": 1792708923816.0
+ },
+ "t-rinaudo": {
+  "n": "Rinaudo",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "MC",
+  "precio": 55.0,
+  "quien": "Lucas",
+  "t": 1792775429509.0,
+  "tipo": "troll"
+ },
+ "t-stephan-ruggeri": {
+  "n": "Stephan Ruggeri",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "LI",
+  "precio": 35.0,
+  "quien": "Lucas",
+  "t": 1792775369718.0,
+  "tipo": "troll"
  },
  "t-urribarri": {
   "n": "Urribarri",
