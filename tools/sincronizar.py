@@ -209,6 +209,10 @@ def ediciones(txt):
             e['p'] = v['p']
         if 'nat' in v:
             e['nat'] = texto(v.get('nat'), 40)
+        if v.get('tipo') in TIPOS:
+            e['tipo'] = v['tipo']
+        if v.get('lg') and str(v['lg']).isalnum() and len(str(v['lg'])) <= 8:
+            e['lg'] = str(v['lg'])
         if 'club' in v:
             e['club'] = texto(v.get('club'), 50)
         by = num(v.get('by'), 1850, 2015)
@@ -227,6 +231,16 @@ def ediciones(txt):
 def aplicar_edicion(j, e):
     """Entrada de jugadores.json con una edición aplicada (también la usa el armado del juego)."""
     j = dict(j)
+    tipo = e.get('tipo')
+    if tipo == 'troll':
+        j.update(troll=1, ley=0, lg='TRL', v=0.5)
+        j.setdefault('precio', 40)
+    elif tipo == 'leyenda':
+        j.pop('troll', None)
+        j.update(ley=1, lg='LEY')
+    elif tipo == 'actual':
+        j.pop('troll', None)
+        j.update(ley=0, lg=e.get('lg') or (j.get('lg') if j.get('lg') not in ('LEY', 'TRL', None, '') else 'ARG1'))
     for campo in ('n', 'p', 'nat', 'by', 'club'):
         if campo in e:
             j[campo] = e[campo]

@@ -115,7 +115,7 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
       <label>Nacionalidad<input name="nat" maxlength="40" placeholder="Argentina"></label>
       <label data-solo="leyenda actual">Año de nacimiento<input name="by" type="number" min="1850" max="2015" inputmode="numeric"></label>
       <label data-solo="leyenda actual">Club<input name="club" maxlength="50" placeholder="Club por el que se lo recuerda"></label>
-      <label data-solo="actual" data-modo="alta">Liga<select name="lg"></select></label>
+      <label data-solo="actual">Liga<select name="lg"></select></label>
       <label data-solo="leyenda actual">Valor (millones)<input name="v" type="number" min="0" max="300" step="0.5" value="40"></label>
       <label data-solo="troll">Precio trampa (millones)<input name="precio" type="number" min="1" max="300" value="45"></label>
       <label class="ancho" data-modo="alta">Link a una foto (opcional)<input name="foto" type="url" placeholder="Si no ponés ni link ni archivo, se busca sola"></label>
@@ -370,6 +370,10 @@ function mezclarAltas(){
   for (const j of J) if (ed[j.k]) aplicarEd(j, ed[j.k]);
 }
 function aplicarEd(j, e){
+  // cambio de tipo: leyenda, troll o actual
+  if (e.tipo === 'troll'){ j.troll = 1; j.ley = 0; j.lg = 'TRL'; j.v = 0.5; }
+  else if (e.tipo === 'leyenda'){ delete j.troll; j.ley = 1; j.lg = 'LEY'; }
+  else if (e.tipo === 'actual'){ delete j.troll; j.ley = 0; j.lg = e.lg || (j.lg === 'LEY' || j.lg === 'TRL' ? 'ARG1' : j.lg); }
   if (e.n) j.n = e.n;
   for (const c of ['p', 'nat', 'club']) if (typeof e[c] === 'string') j[c] = e[c];
   if (e.by && !j.troll) j.by = e.by;
@@ -406,13 +410,13 @@ form.tipo.addEventListener('change', tipoAlta); tipoAlta();
 function abrirAlta(abrir, j){
   editando = abrir && j ? j.k : null;
   form.reset();
-  form.tipo.disabled = !!editando;
   document.getElementById('altatit').textContent = editando ? 'Editar jugador' : 'Agregar jugador';
   document.getElementById('altaok').textContent = editando ? 'Guardar cambios' : 'Agregar';
   if (editando){
     form.tipo.value = j.troll ? 'troll' : j.ley ? 'leyenda' : 'actual';
     form.n.value = j.n; form.p.value = j.p || 'MC'; form.nat.value = j.nat || ''; form.by.value = j.by || '';
-    form.club.value = j.club || ''; form.v.value = j.v ?? ''; form.precio.value = j.precio ?? 40; form.oculto.checked = !!j.oculto;
+    form.club.value = j.club || ''; form.v.value = j.troll ? 40 : (j.v ?? '');
+    if (LIGAS[j.lg]) form.lg.value = j.lg; form.precio.value = j.precio ?? 40; form.oculto.checked = !!j.oculto;
   }
   tipoAlta();
   form.hidden = !abrir; document.getElementById('nuevo').setAttribute('aria-expanded', String(abrir && !editando));
@@ -431,9 +435,9 @@ form.addEventListener('submit', async e => {
   if (!n){ msg.innerHTML = '<span class="aviso">Falta el nombre.</span>'; return; }
   if (editando){
     if (t !== 'troll' && by && (by < 1850 || by > 2015)){ msg.innerHTML = '<span class="aviso">El año de nacimiento no parece correcto.</span>'; return; }
-    const k = editando, ed = {n, p: form.p.value, nat: form.nat.value.trim(), oculto: form.oculto.checked, t: Date.now()};
+    const k = editando, ed = {n, tipo: t, p: form.p.value, nat: form.nat.value.trim(), oculto: form.oculto.checked, t: Date.now()};
     if (t === 'troll') ed.precio = +form.precio.value || 40;
-    else { if (by) ed.by = by; ed.club = form.club.value.trim(); if (form.v.value !== '') ed.v = +form.v.value; }
+    else { if (by) ed.by = by; ed.club = form.club.value.trim(); ed.v = form.v.value !== '' ? +form.v.value : 30; if (t === 'actual') ed.lg = form.lg.value; }
     misEd[k] = ed; grabarLS('subasta-ediciones', misEd); enviarEdicion(k, ed);
     mezclarAltas(); abrirAlta(false); pintar();
     pie(`<b>${esc(n)}</b> actualizado. En unos minutos se ve en el juego.`);

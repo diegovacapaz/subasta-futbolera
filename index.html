@@ -339,7 +339,12 @@ function aplicarEdiciones(ed){
   const idx = {}; D.forEach((d, i) => { const k = claveFila(d); if (k && ed[k]) idx[k] = i; });
   for (const [k, e] of Object.entries(ed)){
     const i = idx[k]; if (i === undefined || !e) continue;
-    ORIG[i] = D[i]; const d = D[i].slice(), trl = d[5] === 'TRL';
+    ORIG[i] = D[i]; const d = D[i].slice();
+    // cambio de tipo hecho desde la revisión
+    if (e.tipo === 'troll' && d[5] !== 'TRL'){ d[5] = 'TRL'; d[6] = 0.5; d[12] = 40; }
+    else if (e.tipo === 'leyenda') d[5] = 'LEY';
+    else if (e.tipo === 'actual') d[5] = LEAGUES[e.lg] ? e.lg : (LEAGUES[d[5]] ? d[5] : 'ARG1');
+    const trl = d[5] === 'TRL';
     if (e.n){ d[0] = e.n; d[8] = trl ? (e.n.replace(/\s*\(.*?\)/g, '') || e.n) : e.n; }
     if (e.p && POS[e.p]) d[1] = e.p;
     if (typeof e.nat === 'string') d[2] = e.nat;
