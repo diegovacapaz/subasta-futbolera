@@ -49,19 +49,19 @@
  },
  {
   "k": "a-rayo",
-  "tipo": "leyenda",
+  "tipo": "troll",
   "n": "Rayo",
-  "p": "DC",
-  "nat": "",
+  "p": "ARQ",
+  "nat": "Argentina",
   "by": null,
   "club": "",
   "lg": "",
-  "v": 40.0,
-  "precio": null,
-  "foto": "subida:mvl5913rulrhsz",
+  "v": 1,
+  "precio": 45.0,
+  "foto": "",
   "baja": false,
   "quien": "Diego",
-  "t": 1792770471627.0
+  "t": 1792773815901.0
  },
  {
   "k": "a-hugo",
