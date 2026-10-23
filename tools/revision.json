@@ -14,6 +14,9 @@
  "n-andrea-pirlo-1979": {
   "url": "https://prod-media.beinsports.com/image/1671480031928_c4755fa5-5be5-45f4-9fb7-16ab9f9350a7.jpg"
  },
+ "n-andreas-brehme-1960": {
+  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkb56ku74tzw9.jpg"
+ },
  "n-andriy-shevchenko-1976": {
   "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ15V1yShiDjxASxrRW_SWmPj8RzfOWwLBuAPFq-jKLHHeeAItz7VWcI5di&s=10"
  },
@@ -46,10 +49,16 @@
   "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUMc25sUpQ2oWOaHzs3PAu2pu3JLOgCJh4G_vEIFnUqsrq2GjE3WuAHYpn&s=10"
  },
  "n-cafu-1970": {
+  "recortar": [
+   "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk3h1ve6yvzar.jpg"
+  ],
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk3h1ve6yvzar.jpg"
  },
  "n-carles-puyol-1978": {
   "url": "https://thumbs.dreamstime.com/b/carles-puyol-fc-barcelona-21863310.jpg"
+ },
+ "n-christian-vieri-1973": {
+  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkb2nf343j971.jpg"
  },
  "n-clarence-seedorf-1976": {
   "url": "https://i.pinimg.com/736x/4f/fe/35/4ffe356b803b9b9f0c46819920989313.jpg"
@@ -132,6 +141,9 @@
   ],
   "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQ-mUP19xFd7sddR3-aJX_8zuvZ5_TW3QY0b1e7JOveomYVQx3d9QaxD4&s=10"
  },
+ "n-gary-lineker-1960": {
+  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkb4gnhskd0rc.jpg"
+ },
  "n-gary-neville-1975": {
   "url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ83YqDE9UO7uUMJGZqKiARUKbJVoAd_QP6akxMCKEqZ46vCGeM6uQ_oFXm&s=10"
  },
@@ -143,6 +155,9 @@
  },
  "n-german-burgos-1969": {
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk3nw37fwj4qr.jpg"
+ },
+ "n-gheorghe-hagi-1965": {
+  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkb2s8otmtiv2.jpg"
  },
  "n-gianluca-zambrotta-1977": {
   "url": "https://thumbs.dreamstime.com/b/gianluca-zambrotta-antes-del-partido-turin-italia-de-septiembre-delle-alpi-stadium-uefa-champions-liague-fc-juventus-sk-189240165.jpg"
@@ -342,6 +357,9 @@
  "n-ronaldo-nazario-1976": {
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk2zb8pg8f4uc.jpg"
  },
+ "n-roy-keane-1971": {
+  "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvkb3op6aps5ge.jpg"
+ },
  "n-ruud-van-nistelrooy-1976": {
   "url": "https://www.shutterstock.com/editorial/image-editorial/O0D0U11aM2TaA045ODU2OA==/ruud-van-nistelrooy-real-madrid-rues-missed-440nw-8493386au.jpg"
  },
@@ -373,6 +391,9 @@
   "url": "https://s.hs-data.com/gfx/person/l/41486.jpg?fallback=male"
  },
  "n-thierry-henry-1977": {
+  "no": [
+   "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk32um88s5lkf.jpg"
+  ],
   "url": "https://raw.githubusercontent.com/diegovacapaz/subasta-futbolera/main/fotos/subidas/mvk32um88s5lkf.jpg"
  },
  "n-ubaldo-fillol-1950": {
