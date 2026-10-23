@@ -286,5 +286,53 @@
   "baja": false,
   "quien": "Lucas",
   "t": 1792776361056.0
+ },
+ {
+  "k": "a-luquitas-de-novio",
+  "tipo": "troll",
+  "n": "Luquitas (De novio)",
+  "p": "MC",
+  "nat": "",
+  "by": null,
+  "club": "",
+  "lg": "",
+  "v": 1,
+  "precio": 60.0,
+  "foto": "subida:mvl8tvat8umtvo",
+  "baja": false,
+  "quien": "Lucas",
+  "t": 1792776482718.0
+ },
+ {
+  "k": "a-nacho-prime-313",
+  "tipo": "troll",
+  "n": "Nacho (Prime 313)",
+  "p": "DC",
+  "nat": "",
+  "by": null,
+  "club": "",
+  "lg": "",
+  "v": 1,
+  "precio": 70.0,
+  "foto": "subida:mvl8vepatq4hrn",
+  "baja": false,
+  "quien": "Lucas",
+  "t": 1792776554529.0
+ },
+ {
+  "k": "a-colo-super-egoista",
+  "tipo": "troll",
+  "n": "Colo (Super egoista)",
+  "p": "DC",
+  "nat": "",
+  "by": null,
+  "club": "",
+  "lg": "",
+  "v": 1,
+  "precio": 70.0,
+  "foto": "subida:mvl8whzfjgbjdb",
+  "baja": false,
+  "quien": "Lucas",
+  "t": 1792776605435.0
  }
 ]
