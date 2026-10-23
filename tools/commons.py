@@ -184,9 +184,14 @@ def evaluar(c, j):
             print(f'  link propuesto sin imagen usable: {c["thumb"][:90]} ({e})', flush=True)
         return None
     cara = medio.una_cara(rgb)
-    if not cara or cara[3] < 36:
+    if c.get('manual'):
+        # Foto elegida a mano en la revisión: se usa aunque no sea un medio cuerpo perfecto.
+        # Con varias personas (una pareja, por ejemplo) va la foto entera; si llega poco, hasta donde llegue.
+        if not cara or cara[3] < 24:
+            return (-9, rgb, None) if medio.caras(rgb) else None
+    elif not cara or cara[3] < 36:
         return None
-    if medio.alcance(cara, rgb.height) < medio.MIN_L:
+    elif medio.alcance(cara, rgb.height) < medio.MIN_L:
         return None
     caja = medio.caja(cara, rgb.width, rgb.height)
     crop = rgb.crop(caja)
@@ -303,7 +308,9 @@ def main():
                 ses = [fino[0]]
             for s in ses:
                 cut = remove(crop, session=s, post_process_mask=True)
-                a = medio.limpiar(cut.getchannel('A'), centro, bordes=not c.get('manual'))
+                a = medio.limpiar(cut.getchannel('A'), centro, bordes=not c.get('manual')) if centro else None
+                if a is None and c.get('manual') and cut.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox():
+                    a = cut.getchannel('A')      # elegida a mano: se acepta el recorte tal cual
                 if a is not None:
                     cut = cut.copy()
                     cut.putalpha(a)
