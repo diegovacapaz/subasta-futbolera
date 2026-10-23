@@ -68,6 +68,15 @@
   "quien": "Lucas",
   "t": 1792774615675.0
  },
+ "t-augusto-max": {
+  "n": "Augusto Max",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "MC",
+  "precio": 40.0,
+  "quien": "Lucas",
+  "t": 1792774655354.0
+ },
  "t-bruno-bianchi": {
   "n": "Bruno Bianchi",
   "nat": "Argentina",
@@ -76,6 +85,33 @@
   "precio": 55.0,
   "quien": "Lucas",
   "t": 1792774622709.0
+ },
+ "t-christian-chimino": {
+  "n": "Christian Chimino",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "LD",
+  "precio": 60.0,
+  "quien": "Lucas",
+  "t": 1792774671908.0
+ },
+ "t-emiliano-papa": {
+  "n": "Emiliano Papa",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "LD",
+  "precio": 40.0,
+  "quien": "Lucas",
+  "t": 1792774682591.0
+ },
+ "t-federico-vismara": {
+  "n": "Federico Vismara",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "MC",
+  "precio": 35.0,
+  "quien": "Lucas",
+  "t": 1792774641284.0
  },
  "t-komar": {
   "n": "Komar",
@@ -103,6 +139,15 @@
   "precio": 45.0,
   "quien": "Juan",
   "t": 1792708923816.0
+ },
+ "t-urribarri": {
+  "n": "Urribarri",
+  "nat": "Argentina",
+  "oculto": true,
+  "p": "LI",
+  "precio": 40.0,
+  "quien": "Lucas",
+  "t": 1792774706903.0
  },
  "tm238223": {
   "by": 1993,
