@@ -472,8 +472,11 @@ form.addEventListener('submit', async e => {
 document.getElementById('altacancel').addEventListener('click', () => abrirAlta(false));
 document.getElementById('nuevo').addEventListener('click', () => abrirAlta(form.hidden || !!editando));
 function datosEd(j){
-  const e = {n: j.n, p: j.p || 'MC', nat: j.nat || ''};
-  if (j.troll) e.precio = j.precio ?? 40; else { if (j.by) e.by = j.by; e.club = j.club || ''; e.v = j.v; }
+  // todos los datos actuales, tipo incluido: la edición más nueva reemplaza a las anteriores
+  const tipo = j.troll ? 'troll' : j.ley ? 'leyenda' : 'actual';
+  const e = {n: j.n, tipo, p: j.p || 'MC', nat: j.nat || ''};
+  if (j.troll) e.precio = j.precio ?? 40;
+  else { if (j.by) e.by = j.by; e.club = j.club || ''; e.v = j.v; if (tipo === 'actual' && j.lg) e.lg = j.lg; }
   return e;
 }
 function quitar(k){
