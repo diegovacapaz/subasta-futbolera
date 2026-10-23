@@ -486,7 +486,7 @@ function trollFor(t){
   return id;
 }
 function withTrolls(ids, t){
-  const p = S.cfg.blind ? 0 : (S.cfg.troll || 0) / 100;
+  const p = (S.cfg.troll || 0) / 100;      // también con precio a ciegas: el troll sale con un precio al azar, como todos
   return ids.map(id => { if (id >= 0 && Math.random() < p){ const tr = trollFor(t); if (tr !== null) return tr; } return id; });
 }
 function pushHist(){ const {hist, ...rest} = S; S.hist.push(JSON.stringify(rest)); if (S.hist.length > 60) S.hist.shift(); }
@@ -803,7 +803,9 @@ function poolStats(cfg){
 }
 
 const trollTxt = v => v ? v + ' %' : 'No';
-const trollNota = v => v ? `En cada lote hay ${v} % de chance de que salga un troll con precio de figura. Se descubre al revelarlo.` : 'No sale ningún troll: todos los precios base son reales.';
+const trollNota = v => !v ? 'No sale ningún troll.' : S.cfg.blind
+  ? `En cada lote hay ${v} % de chance de que salga un troll. Con precio a ciegas sale con un precio al azar, como todos. Se descubre al revelarlo.`
+  : `En cada lote hay ${v} % de chance de que salga un troll con precio de figura. Se descubre al revelarlo.`;
 function vSetup(){
   const c = S.cfg, st = poolStats(c);
   const lgCount = {}; D.forEach(d => { if (d[6] >= c.minV) lgCount[d[5]] = (lgCount[d[5]]||0)+1; });
@@ -865,7 +867,7 @@ function vSetup(){
           <p class="note">Cada lote sale con un precio al azar en ese rango, así el precio no delata a nadie. El valor real se ve al revelarlo.</p>`
           : `<p class="note">Cada lote sale con su valor de mercado real.</p>`}
       </div>
-      <div class="field" ${c.blind?'hidden':''}><span class="label">Precios trampa</span>
+      <div class="field"><span class="label">${c.blind ? 'Trolls' : 'Precios trampa'}</span>
         <div class="slider"><input id="trollpct" type="range" min="0" max="100" step="5" value="${c.troll}" aria-label="Chance de troll por lote" aria-describedby="trollnote">
           <output id="trollout" class="num" for="trollpct">${trollTxt(c.troll)}</output></div>
         <p class="note" id="trollnote">${trollNota(c.troll)}</p>
