@@ -275,7 +275,8 @@ def main():
             break
         cuenta += 1
         r = rev.get(k) or {}
-        cs = candidatas(j)
+        # a los trolls no se les busca por nombre en Commons (son apodos): solo la foto que alguien propuso
+        cs = [] if j.get('troll') else candidatas(j)
         if cs is not None:
             cs = [c for c in cs if c['title'] not in r.get('no', [])]
             if r.get('url') and r['url'] not in r.get('no', []):    # foto propuesta en la revisión: se prueba primero
