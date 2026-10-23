@@ -1,14 +1,33 @@
 {
  "a-bauti-muletas-2001": {
-  "by": 2001,
-  "club": "RdM",
   "n": "Bauti (Gaucho)",
   "nat": "",
   "oculto": false,
   "p": "MC",
+  "precio": 40.0,
   "quien": "Diego",
-  "t": 1792770373413.0,
-  "v": 25.0
+  "t": 1792770996953.0,
+  "tipo": "troll"
+ },
+ "a-juanma-drogba-2000": {
+  "n": "Juanma (Drogba)",
+  "nat": "Argentina",
+  "oculto": false,
+  "p": "DC",
+  "precio": 40.0,
+  "quien": "Diego",
+  "t": 1792770989847.0,
+  "tipo": "troll"
+ },
+ "a-rayo": {
+  "n": "Rayo",
+  "nat": "",
+  "oculto": false,
+  "p": "DC",
+  "precio": 40.0,
+  "quien": "Diego",
+  "t": 1792771003174.0,
+  "tipo": "troll"
  },
  "n-pele-1940": {
   "by": 1940,
