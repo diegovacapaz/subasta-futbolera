@@ -22,12 +22,11 @@
  "a-rayo": {
   "n": "Rayo",
   "nat": "",
-  "oculto": false,
+  "oculto": true,
   "p": "DC",
   "precio": 40.0,
-  "quien": "Diego",
-  "t": 1792771003174.0,
-  "tipo": "troll"
+  "quien": "Lucas",
+  "t": 1792771984438.0
  },
  "n-pele-1940": {
   "by": 1940,
