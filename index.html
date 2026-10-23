@@ -66,6 +66,9 @@ input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px 
 .stepper button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:20px;font-weight:700}
 .stepper b{font-family:var(--f-display);font-size:34px;min-width:36px;text-align:center}
 .names{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.slider{display:flex;align-items:center;gap:12px;max-width:360px}
+.slider input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.slider output{min-width:44px;text-align:right;font-weight:700}
 .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content;max-width:100%}
 .seg button{border:0;background:var(--surface);padding:8px 14px;font-family:var(--f-num);font-weight:700;font-size:15px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
@@ -799,6 +802,8 @@ function poolStats(cfg){
   return {tot, short};
 }
 
+const trollTxt = v => v ? v + ' %' : 'No';
+const trollNota = v => v ? `En cada lote hay ${v} % de chance de que salga un troll con precio de figura. Se descubre al revelarlo.` : 'No sale ningún troll: todos los precios base son reales.';
 function vSetup(){
   const c = S.cfg, st = poolStats(c);
   const lgCount = {}; D.forEach(d => { if (d[6] >= c.minV) lgCount[d[5]] = (lgCount[d[5]]||0)+1; });
@@ -861,8 +866,9 @@ function vSetup(){
           : `<p class="note">Cada lote sale con su valor de mercado real.</p>`}
       </div>
       <div class="field" ${c.blind?'hidden':''}><span class="label">Precios trampa</span>
-        <div class="seg">${[0,15,30].map(v=>`<button data-a="troll" data-v="${v}" aria-pressed="${c.troll===v}">${v ? v + ' %' : 'No'}</button>`).join('')}</div>
-        <p class="note">${c.troll ? `En cada lote hay ${c.troll} % de chance de que salga un troll con precio de figura. Se descubre al revelarlo.` : 'Todos los precios base son reales.'}</p>
+        <div class="slider"><input id="trollpct" type="range" min="0" max="100" step="5" value="${c.troll}" aria-label="Chance de troll por lote" aria-describedby="trollnote">
+          <output id="trollout" class="num" for="trollpct">${trollTxt(c.troll)}</output></div>
+        <p class="note" id="trollnote">${trollNota(c.troll)}</p>
       </div>
       <div class="field"><span class="label">Cuenta regresiva de las pujas</span>
         <div class="seg">${[0,10,15,20].map(v=>`<button data-a="timer" data-v="${v}" aria-pressed="${c.timer===v}">${v ? v + ' s' : 'No'}</button>`).join('')}</div>
@@ -1060,6 +1066,8 @@ document.addEventListener('input', e=>{
   if (t.id === 'puburl'){ S.cfg.publicUrl = t.value.trim(); save(); const q = document.querySelector('#mesa .mesa-qr'); if (q) q.outerHTML = vQR(); }
   else if (t.id === 'budget'){ const v = parseFloat(t.value); if (!isNaN(v) && v > 0){ S.cfg.budget = v; save(); } }
   else if (t.id === 'hints'){ S.cfg.hints = t.checked; save(); }
+  else if (t.id === 'trollpct'){ const v = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0)); S.cfg.troll = v; save();
+    const o = document.getElementById('trollout'), n = document.getElementById('trollnote'); if (o) o.textContent = trollTxt(v); if (n) n.textContent = trollNota(v); }
   else if (t.id === 'big'){ S.cfg.big = t.checked; render(); }
   else if (t.id === 'market'){ S.cfg.market = t.checked; save(); }
   else if (t.id === 'bmin' || t.id === 'bmax'){ const v = parseInt(t.value, 10); if (!isNaN(v) && v >= 0){ S.cfg[t.id === 'bmin' ? 'bMin' : 'bMax'] = v; save(); } }
